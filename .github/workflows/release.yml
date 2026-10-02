@@ -1,0 +1,48 @@
+name: GitHub release
+
+on:
+  push:
+    tags:
+      - "vscode-v*"
+      - "desktop-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  vscode:
+    if: startsWith(github.ref_name, 'vscode-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            vscode-extension/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: vscode-extension
+      - run: npm test
+      - run: npm test
+        working-directory: vscode-extension
+      - run: npm run package
+        working-directory: vscode-extension
+      - name: Publish VSIX release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" vscode-extension/dist/agentic-tiles-*.vsix --generate-notes --title "$GITHUB_REF_NAME"
+
+  desktop:
+    if: startsWith(github.ref_name, 'desktop-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Ubuntu package
+        run: ./scripts/build-deb.sh
+      - name: Publish Debian package release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/agentic-tiles_*.deb --generate-notes --title "$GITHUB_REF_NAME"

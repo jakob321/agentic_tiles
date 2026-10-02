@@ -1,0 +1,75 @@
+{
+  "name": "agentic-tiles",
+  "displayName": "Agentic Tiles",
+  "description": "Run multiple Codex CLI conversations in a persistent tiled VS Code workspace.",
+  "version": "0.1.0",
+  "publisher": "jakob321",
+  "license": "MIT",
+  "icon": "media/agentic-tiles.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jakob321/agentic_tiles.git",
+    "directory": "vscode-extension"
+  },
+  "homepage": "https://github.com/jakob321/agentic_tiles#readme",
+  "bugs": {
+    "url": "https://github.com/jakob321/agentic_tiles/issues"
+  },
+  "pricing": "Free",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Other", "Machine Learning"],
+  "keywords": ["codex", "ai", "agents", "chat", "tiles", "multi-agent", "parallel"],
+  "activationEvents": [
+    "onCommand:agenticTiles.open",
+    "onWebviewPanel:agenticTiles.main"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "agenticTiles.open",
+        "title": "Open Agentic Tiles",
+        "category": "Agentic Tiles",
+        "icon": "$(layout)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "agenticTiles.open",
+          "group": "navigation@90"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Agentic Tiles",
+      "properties": {
+        "agenticTiles.codexPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to the Codex CLI executable. Leave empty to auto-detect it."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "vscode:prepublish": "npm run build",
+    "typecheck": "tsc --noEmit && npm --prefix .. run build",
+    "build:host": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "build:webview": "esbuild ../src/main.tsx --bundle --minify --define:process.env.NODE_ENV='\"production\"' --platform=browser --format=iife --outfile=dist/webview.js",
+    "build": "npm run clean && npm run typecheck && npm run build:host && npm run build:webview",
+    "test": "vitest run",
+    "package": "vsce package --out dist/agentic-tiles-0.1.0.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.9.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,8 @@
+.gitignore
+src/**
+tests/**
+node_modules/**
+tsconfig.json
+package-lock.json
+**/*.map
+dist/*.vsix
