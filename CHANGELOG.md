@@ -4,6 +4,10 @@ All notable changes to Agentic Tiles are documented here.
 
 ## Unreleased
 
+## Desktop 0.4.2 / VS Code 0.2.2
+
+- Tightened command-row spacing and removed all command-text backgrounds, borders, and shadows.
+
 ## Desktop 0.4.1 / VS Code 0.2.1
 
 - Added a small animated thinking indicator at the bottom of active conversations.

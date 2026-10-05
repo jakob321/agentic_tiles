@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Tightened command-row spacing and removed all command-text backgrounds, borders, and shadows.
+
 ## 0.2.1
 
 - Added an animated thinking indicator while Codex is working.

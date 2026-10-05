@@ -1,6 +1,6 @@
 [package]
 name = "agentic-tiles"
-version = "0.4.1"
+version = "0.4.2"
 description = "A tiled workspace for parallel Codex CLI conversations"
 authors = ["Jakob Osterberg"]
 edition = "2021"
