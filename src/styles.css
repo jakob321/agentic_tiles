@@ -1131,6 +1131,42 @@ select:focus {
   white-space: pre-wrap;
 }
 
+.command-card {
+  margin-bottom: 3px;
+  padding: 1px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 10px;
+}
+
+.command-card summary {
+  min-height: 20px;
+  gap: 6px;
+  padding: 1px 0;
+  color: var(--text-faint);
+}
+
+.command-card summary code {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.command-card pre {
+  max-height: 150px;
+  margin: 2px 0 3px 13px;
+  padding: 3px 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.command-card .tool-cwd {
+  margin: 1px 0 0 13px;
+  font-size: 8px;
+}
+
 .tool-cwd {
   margin-top: 8px;
   color: var(--text-faint);
@@ -1355,6 +1391,71 @@ select:focus {
   background: var(--chrome);
 }
 
+.thinking-indicator {
+  display: flex;
+  width: 100%;
+  max-width: 920px;
+  align-items: center;
+  gap: 5px;
+  margin: 2px auto 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  animation: thinking-pulse 1.6s ease-in-out infinite;
+}
+
+.thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.thinking-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: thinking-dot 1.2s ease-in-out infinite;
+}
+
+.thinking-dots i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.thinking-dots i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes thinking-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-indicator,
+  .thinking-dots i {
+    animation: none;
+  }
+}
+
 .queued-messages {
   display: grid;
   grid-column: 1 / -1;
@@ -1484,9 +1585,10 @@ select:focus {
 
 .composer-shell textarea {
   min-height: 46px;
-  max-height: 150px;
+  max-height: min(260px, 36vh);
   flex: 1;
-  resize: vertical;
+  overflow-y: auto;
+  resize: none;
   padding: 9px 10px;
   line-height: 1.35;
 }

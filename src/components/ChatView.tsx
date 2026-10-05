@@ -32,6 +32,7 @@ const NO_APPROVALS: ApprovalRequest[] = [];
 const NO_COMMAND_MESSAGES: CommandMessage[] = [];
 const NO_USER_INPUT_REQUESTS: UserInputRequest[] = [];
 const NO_QUEUED_SUBMISSIONS: QueuedSubmission[] = [];
+const COMPOSER_MIN_HEIGHT = 46;
 
 export function ChatView({ threadId }: { threadId: string }) {
   const chat = useAppStore((state) => state.chats[threadId]);
@@ -76,9 +77,19 @@ export function ChatView({ threadId }: { threadId: string }) {
     if (nearBottom) element.scrollTop = element.scrollHeight;
   }, [threadId, items.length, commandMessages.length, userInputRequests.length, chat?.loaded, chat?.running]);
 
+  useLayoutEffect(() => {
+    const element = composerRef.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.max(COMPOSER_MIN_HEIGHT, element.scrollHeight)}px`;
+  }, [message, threadId]);
+
   const slashSuggestions = message.startsWith("/") && !message.includes(" ")
     ? SLASH_COMMANDS.filter((item) => item.name.startsWith(message.toLocaleLowerCase()))
     : [];
+  const showThinking = Boolean(
+    chat?.running && approvals.length === 0 && userInputRequests.length === 0,
+  );
 
   const submit = async () => {
     const text = message.trim();
@@ -109,7 +120,7 @@ export function ChatView({ threadId }: { threadId: string }) {
       <ChatControls threadId={threadId} />
 
       <div className="conversation" ref={scrollRef}>
-        {items.length === 0 && commandMessages.length === 0 && userInputRequests.length === 0 && !chat?.error && (
+        {items.length === 0 && commandMessages.length === 0 && userInputRequests.length === 0 && !chat?.error && !chat?.running && (
           <div className="conversation-empty">
             <strong>Ready</strong>
             <span>Send a message to continue this Codex chat.</span>
@@ -128,6 +139,16 @@ export function ChatView({ threadId }: { threadId: string }) {
           <CommandResult key={command.id} message={command} />
         ))}
         {chat?.error && <div className="chat-error">{chat.error}</div>}
+        {showThinking && (
+          <div className="thinking-indicator" role="status" aria-label="Codex is thinking">
+            <span>Thinking</span>
+            <span className="thinking-dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="composer-shell">
@@ -322,7 +343,7 @@ function ItemView({ item, cwd }: { item: ThreadItem; cwd: string }) {
 
   if (item.type === "commandExecution") {
     return (
-      <details className="tool-card" open={item.status === "inProgress"}>
+      <details className="tool-card command-card" open={item.status === "inProgress"}>
         <summary>
           <span className={`tool-status status-${String(item.status)}`} />
           <code>{String(item.command ?? "Command")}</code>

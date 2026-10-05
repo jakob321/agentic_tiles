@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Added an animated thinking indicator while Codex is working.
+- Reduced the vertical space used by command execution rows and output.
+- Made the composer grow automatically for longer prompts.
+
 ## 0.2.0
 
 - Queue multiple follow-up messages while a Codex turn is running.

@@ -4,6 +4,12 @@ All notable changes to Agentic Tiles are documented here.
 
 ## Unreleased
 
+## Desktop 0.4.1 / VS Code 0.2.1
+
+- Added a small animated thinking indicator at the bottom of active conversations.
+- Made command execution rows borderless and more vertically compact.
+- Made the composer grow with long prompts before falling back to scrolling.
+
 ## Desktop 0.4.0 / VS Code 0.2.0
 
 - Added durable per-chat follow-up queues backed by the Codex app-server.

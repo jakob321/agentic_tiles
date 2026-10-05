@@ -152,6 +152,7 @@ describe("chat view", () => {
 
     expect(container.textContent).toContain("First follow-up");
     expect(container.textContent).toContain("Second follow-up");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("Thinking");
     const steerButtons = [...container.querySelectorAll<HTMLButtonElement>(".queued-message button")];
     await act(async () => steerButtons[0].click());
     expect(codex.steerQueuedMessage).toHaveBeenCalledWith(
@@ -206,5 +207,102 @@ describe("chat view", () => {
 
     expect(codex.enqueueMessage).toHaveBeenCalledWith(threadId, "One more thing");
     expect(codex.startTurn).not.toHaveBeenCalledWith(threadId, "One more thing");
+  });
+
+  it("renders command executions as compact command rows", () => {
+    const threadId = "thread-command";
+    useAppStore.setState({
+      approvals: {},
+      commandMessages: {},
+      userInputRequests: {},
+      queues: {},
+      chats: {
+        [threadId]: {
+          thread: {
+            id: threadId,
+            preview: "Command conversation",
+            cwd: "/tmp/project",
+            createdAt: 1,
+            updatedAt: 1,
+            status: { type: "idle" },
+            turns: [
+              {
+                id: "turn-a",
+                status: "completed",
+                items: [
+                  {
+                    id: "command-a",
+                    type: "commandExecution",
+                    command: "npm test",
+                    status: "completed",
+                    aggregatedOutput: "All tests passed",
+                  },
+                ],
+              },
+            ],
+          },
+          liveItems: {},
+          loading: false,
+          loaded: true,
+          resumed: true,
+          running: false,
+        },
+      },
+    });
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    roots.push(root);
+    act(() => root.render(<ChatView threadId={threadId} />));
+
+    const command = container.querySelector(".command-card");
+    expect(command).not.toBeNull();
+    expect(command?.textContent).toContain("npm test");
+  });
+
+  it("grows the composer to fit a long prompt", () => {
+    const threadId = "thread-long-prompt";
+    useAppStore.setState({
+      approvals: {},
+      commandMessages: {},
+      userInputRequests: {},
+      queues: {},
+      chats: {
+        [threadId]: {
+          thread: {
+            id: threadId,
+            preview: "Prompt conversation",
+            cwd: "/tmp/project",
+            createdAt: 1,
+            updatedAt: 1,
+            status: { type: "idle" },
+            turns: [],
+          },
+          liveItems: {},
+          loading: false,
+          loaded: true,
+          resumed: true,
+          running: false,
+        },
+      },
+    });
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    roots.push(root);
+    act(() => root.render(<ChatView threadId={threadId} />));
+    const textarea = container.querySelector<HTMLTextAreaElement>("textarea")!;
+    Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 176 });
+
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )?.set;
+      setter?.call(textarea, "A long prompt\nwith several lines\nthat should expand the composer");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(textarea.style.height).toBe("176px");
   });
 });

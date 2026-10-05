@@ -66,7 +66,7 @@ Agentic Tiles launches `codex app-server --stdio`; it does not bundle or replace
 cd vscode-extension
 npm ci
 npm run package
-code --install-extension dist/agentic-tiles-0.2.0.vsix
+code --install-extension dist/agentic-tiles-0.2.1.vsix
 ```
 
 Then click the **Agentic Tiles** layout icon in the editor title bar, or run
@@ -76,7 +76,7 @@ Then click the **Agentic Tiles** layout icon in the editor title bar, or run
 
 ```bash
 ./scripts/build-deb.sh
-sudo apt install ./release/agentic-tiles_0.4.0_amd64.deb
+sudo apt install ./release/agentic-tiles_0.4.1_amd64.deb
 ```
 
 The containerized build targets Debian 12-compatible WebKitGTK libraries and keeps Rust/Tauri

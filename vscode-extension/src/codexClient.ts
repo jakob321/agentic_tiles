@@ -107,7 +107,7 @@ export class CodexClient {
       });
 
       await this.requestStarted("initialize", {
-        clientInfo: { name: "agentic_tiles_vscode", title: "Agentic Tiles for VS Code", version: "0.2.0" },
+        clientInfo: { name: "agentic_tiles_vscode", title: "Agentic Tiles for VS Code", version: "0.2.1" },
         capabilities: { experimentalApi: true },
       });
       this.write({ method: "initialized", params: {} });
