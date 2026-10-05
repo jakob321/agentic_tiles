@@ -5,11 +5,15 @@ import { copyText, isVsCodeHost, openLocalPath, revealLocalPath } from "../api";
 import {
   answerApproval,
   answerUserInput,
+  enqueueMessage,
+  fetchQueue,
   interruptThread,
   loadChat,
+  queuedSubmissionText,
   runSlashCommand,
   SLASH_COMMANDS,
   startTurn,
+  steerQueuedMessage,
 } from "../codex";
 import { localFileTarget } from "../fileLinks";
 import { useAppStore } from "../store";
@@ -17,6 +21,7 @@ import type {
   ApprovalRequest,
   CommandMessage,
   FileUpdateChange,
+  QueuedSubmission,
   ThreadItem,
   UserInputRequest,
 } from "../types";
@@ -26,6 +31,7 @@ import { ChatControls } from "./ChatControls";
 const NO_APPROVALS: ApprovalRequest[] = [];
 const NO_COMMAND_MESSAGES: CommandMessage[] = [];
 const NO_USER_INPUT_REQUESTS: UserInputRequest[] = [];
+const NO_QUEUED_SUBMISSIONS: QueuedSubmission[] = [];
 
 export function ChatView({ threadId }: { threadId: string }) {
   const chat = useAppStore((state) => state.chats[threadId]);
@@ -36,14 +42,19 @@ export function ChatView({ threadId }: { threadId: string }) {
   const userInputRequests = useAppStore(
     (state) => state.userInputRequests[threadId] ?? NO_USER_INPUT_REQUESTS,
   );
+  const queuedSubmissions = useAppStore(
+    (state) => state.queues[threadId] ?? NO_QUEUED_SUBMISSIONS,
+  );
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [steeringId, setSteeringId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const initialScrollThreadRef = useRef<string | null>(null);
 
   useEffect(() => {
     void loadChat(threadId);
+    void fetchQueue(threadId).catch(() => undefined);
   }, [threadId]);
 
   const items = useMemo(() => {
@@ -71,12 +82,14 @@ export function ChatView({ threadId }: { threadId: string }) {
 
   const submit = async () => {
     const text = message.trim();
-    if (!text || sending || chat?.running) return;
+    if (!text || sending) return;
     setMessage("");
     setSending(true);
     try {
       if (text.startsWith("/")) {
         await runSlashCommand(threadId, text);
+      } else if (chat?.running) {
+        await enqueueMessage(threadId, text);
       } else {
         await startTurn(threadId, text);
       }
@@ -135,6 +148,34 @@ export function ChatView({ threadId }: { threadId: string }) {
             ))}
           </div>
         )}
+        {queuedSubmissions.length > 0 && (
+          <div className="queued-messages" aria-label="Queued messages">
+            <div className="queued-messages-heading">
+              <span>Queued</span>
+              <small>{queuedSubmissions.length}</small>
+            </div>
+            {queuedSubmissions.map((submission) => (
+              <div className="queued-message" key={submission.id}>
+                <span title={queuedSubmissionText(submission)}>
+                  {queuedSubmissionText(submission) || "Queued attachment"}
+                </span>
+                <button
+                  type="button"
+                  disabled={steeringId !== null}
+                  onClick={() => {
+                    setSteeringId(submission.id);
+                    void steerQueuedMessage(threadId, submission)
+                      .catch(() => undefined)
+                      .finally(() => setSteeringId(null));
+                  }}
+                  title="Send this guidance to the current turn now"
+                >
+                  {steeringId === submission.id ? "Steering…" : "Steer"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <textarea
           ref={composerRef}
           value={message}
@@ -145,28 +186,33 @@ export function ChatView({ threadId }: { threadId: string }) {
               void submit();
             }
           }}
-          placeholder={chat?.running ? "Codex is working…" : "Message Codex or type / for commands"}
-          disabled={chat?.running || sending}
+          placeholder={
+            chat?.running
+              ? "Queue a follow-up or type / for commands"
+              : "Message Codex or type / for commands"
+          }
+          disabled={sending}
           rows={2}
         />
-        {chat?.running ? (
-          <button
-            className="composer-action stop-action"
-            onClick={() => void interruptThread(threadId)}
-            title="Interrupt turn"
-          >
-            ■
-          </button>
-        ) : (
+        <div className="composer-actions">
           <button
             className="composer-action"
             onClick={() => void submit()}
             disabled={!message.trim() || sending}
-            title="Send message"
+            title={chat?.running ? "Queue message" : "Send message"}
           >
             ↑
           </button>
-        )}
+          {chat?.running && (
+            <button
+              className="composer-action stop-action"
+              onClick={() => void interruptThread(threadId)}
+              title="Interrupt turn"
+            >
+              ■
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

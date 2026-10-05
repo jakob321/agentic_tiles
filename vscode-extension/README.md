@@ -18,6 +18,7 @@ or subscription.
 - Keep independent browser-style tabs in every tile.
 - Drag chats from the searchable sidebar into any tile.
 - Follow live messages, reasoning, commands, tools, approvals, and agent questions.
+- Queue multiple follow-up messages while Codex is working, then steer any one into the active turn.
 - Review changed files and unified diffs directly in the conversation.
 - Open, reveal, or copy local file links from responses.
 - Configure model, reasoning, plan mode, permissions, approval policy, and network per chat.
@@ -68,5 +69,5 @@ npm run package
 Install the generated package with **Extensions: Install from VSIX...** or:
 
 ```bash
-code --install-extension dist/agentic-tiles-0.1.0.vsix
+code --install-extension dist/agentic-tiles-0.2.0.vsix
 ```

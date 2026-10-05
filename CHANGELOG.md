@@ -4,6 +4,14 @@ All notable changes to Agentic Tiles are documented here.
 
 ## Unreleased
 
+## Desktop 0.4.0 / VS Code 0.2.0
+
+- Added durable per-chat follow-up queues backed by the Codex app-server.
+- Added multi-message queue display above the composer and per-message Steer actions.
+- Kept the composer available while a turn is running so new messages can be queued.
+
+## Public release preparation
+
 ### Changed
 
 - Renamed the project from Codex Tiles to Agentic Tiles for its first public release.

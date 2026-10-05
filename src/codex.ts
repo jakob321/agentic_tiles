@@ -5,6 +5,7 @@ import type {
   ChatSettings,
   CodexEnvelope,
   ModelOption,
+  QueuedSubmission,
   RateLimitData,
   ThreadDetail,
   ThreadItem,
@@ -83,6 +84,7 @@ export async function loadChat(threadId: string, force = false): Promise<void> {
       ...(force ? { includeTurns: true } : {}),
     });
     state.setChat(threadId, response.thread, force ? undefined : true);
+    state.setRunning(threadId, threadIsRunning(response.thread));
     state.upsertThread(response.thread);
   } catch (error) {
     if (!force) {
@@ -92,6 +94,7 @@ export async function loadChat(threadId: string, force = false): Promise<void> {
           includeTurns: true,
         });
         state.setChat(threadId, response.thread, false);
+        state.setRunning(threadId, threadIsRunning(response.thread));
         state.upsertThread(response.thread);
         state.setChatError(threadId, attachError(error));
         return;
@@ -102,6 +105,97 @@ export async function loadChat(threadId: string, force = false): Promise<void> {
     }
     state.setChatError(threadId, errorText(error));
   }
+}
+
+function threadIsRunning(thread: ThreadDetail): boolean {
+  return (
+    thread.status?.type === "active" ||
+    thread.turns.some((turn) => turn.status === "inProgress")
+  );
+}
+
+export async function fetchQueue(threadId: string): Promise<QueuedSubmission[]> {
+  const submissions: QueuedSubmission[] = [];
+  let cursor: string | null = null;
+  do {
+    const response: {
+      data: QueuedSubmission[];
+      nextCursor: string | null;
+    } = await codexRequest("thread/queue/list", { threadId, cursor, limit: 100 });
+    submissions.push(...response.data);
+    cursor = response.nextCursor;
+  } while (cursor);
+  useAppStore.getState().setQueue(threadId, submissions);
+  return submissions;
+}
+
+export async function enqueueMessage(threadId: string, text: string): Promise<void> {
+  const input = [{ type: "text", text }];
+  const response = await codexRequest<{ queuedSubmission: QueuedSubmission }>(
+    "thread/queue/add",
+    {
+      threadId,
+      input,
+      clientUserMessageId: newClientMessageId(),
+    },
+  );
+  const state = useAppStore.getState();
+  const current = state.queues[threadId] ?? [];
+  state.setQueue(threadId, [
+    ...current.filter((item) => item.id !== response.queuedSubmission.id),
+    response.queuedSubmission,
+  ]);
+}
+
+export async function steerQueuedMessage(
+  threadId: string,
+  submission: QueuedSubmission,
+): Promise<void> {
+  const state = useAppStore.getState();
+  const activeTurn = [...(state.chats[threadId]?.thread?.turns ?? [])]
+    .reverse()
+    .find((turn) => turn.status === "inProgress");
+  state.setChatError(threadId, undefined);
+
+  try {
+    if (activeTurn) {
+      await codexRequest("turn/steer", {
+        threadId,
+        input: submission.input,
+        clientUserMessageId: submission.clientUserMessageId,
+        expectedTurnId: activeTurn.id,
+      });
+      await codexRequest("thread/queue/delete", {
+        threadId,
+        queuedSubmissionId: submission.id,
+      });
+    } else {
+      await codexRequest("thread/queue/start", {
+        threadId,
+        queuedSubmissionId: submission.id,
+      });
+    }
+    const latest = useAppStore.getState();
+    latest.setQueue(
+      threadId,
+      (latest.queues[threadId] ?? []).filter((item) => item.id !== submission.id),
+    );
+  } catch (error) {
+    useAppStore.getState().setChatError(threadId, errorText(error));
+    void fetchQueue(threadId).catch(() => undefined);
+    throw error;
+  }
+}
+
+export function queuedSubmissionText(submission: QueuedSubmission): string {
+  return submission.input
+    .map((item) => (item.type === "text" && typeof item.text === "string" ? item.text : ""))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function newClientMessageId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export async function createThread(cwd: string, initialPrompt: string): Promise<string> {
@@ -498,6 +592,11 @@ export function handleCodexEvent(message: CodexEnvelope): void {
       void loadChat(threadId, true);
       void refreshThreads();
     }, 100);
+    return;
+  }
+
+  if (method === "thread/queue/changed") {
+    void fetchQueue(threadId).catch(() => undefined);
     return;
   }
 

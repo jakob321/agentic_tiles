@@ -19,6 +19,7 @@ import type {
   LayoutNode,
   ModelOption,
   PersistedWorkspace,
+  QueuedSubmission,
   RateLimitData,
   ThreadDetail,
   ThreadItem,
@@ -60,6 +61,7 @@ interface AppState {
   approvals: Record<string, ApprovalRequest[]>;
   userInputRequests: Record<string, UserInputRequest[]>;
   commandMessages: Record<string, CommandMessage[]>;
+  queues: Record<string, QueuedSubmission[]>;
   models: ModelOption[];
   usage: UsageData | null;
   rateLimits: RateLimitData | null;
@@ -99,6 +101,7 @@ interface AppState {
   addUserInputRequest: (threadId: string, request: UserInputRequest) => void;
   removeUserInputRequest: (threadId: string, requestId: unknown) => void;
   addCommandMessage: (threadId: string, message: CommandMessage) => void;
+  setQueue: (threadId: string, queue: QueuedSubmission[]) => void;
 }
 
 function emptyChat(): ChatDocument {
@@ -115,6 +118,7 @@ export const useAppStore = create<AppState>((set) => ({
   approvals: {},
   userInputRequests: {},
   commandMessages: {},
+  queues: {},
   models: [],
   usage: null,
   rateLimits: null,
@@ -315,6 +319,13 @@ export const useAppStore = create<AppState>((set) => ({
       commandMessages: {
         ...state.commandMessages,
         [threadId]: [...(state.commandMessages[threadId] ?? []), message],
+      },
+    })),
+  setQueue: (threadId, queue) =>
+    set((state) => ({
+      queues: {
+        ...state.queues,
+        [threadId]: queue,
       },
     })),
 }));

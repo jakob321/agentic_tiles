@@ -33,6 +33,8 @@ every pane.
 - **Drag-and-drop layout** — drag a chat from the sidebar into an empty or occupied tile.
 - **Live Codex activity** — follow messages, reasoning summaries, commands, tools, approvals, and
   clarification requests as they happen.
+- **Queue and steer follow-ups** — line up multiple prompts while an agent works, or send any
+  queued message into the active turn immediately.
 - **Built-in change review** — inspect affected files and unified diffs directly in the chat.
 - **Useful file links** — open, reveal, or copy local file paths from agent responses.
 - **Per-chat controls** — model, reasoning effort, collaboration mode, sandbox, approvals, and
@@ -64,7 +66,7 @@ Agentic Tiles launches `codex app-server --stdio`; it does not bundle or replace
 cd vscode-extension
 npm ci
 npm run package
-code --install-extension dist/agentic-tiles-0.1.0.vsix
+code --install-extension dist/agentic-tiles-0.2.0.vsix
 ```
 
 Then click the **Agentic Tiles** layout icon in the editor title bar, or run
@@ -74,7 +76,7 @@ Then click the **Agentic Tiles** layout icon in the editor title bar, or run
 
 ```bash
 ./scripts/build-deb.sh
-sudo apt install ./release/agentic-tiles_0.3.0_amd64.deb
+sudo apt install ./release/agentic-tiles_0.4.0_amd64.deb
 ```
 
 The containerized build targets Debian 12-compatible WebKitGTK libraries and keeps Rust/Tauri

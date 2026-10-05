@@ -81,6 +81,18 @@ export interface UserInputRequest {
   questions: UserInputQuestion[];
 }
 
+export interface QueuedInput {
+  type: string;
+  text?: string;
+  [key: string]: unknown;
+}
+
+export interface QueuedSubmission {
+  id: string;
+  input: QueuedInput[];
+  clientUserMessageId: string;
+}
+
 export interface ChatDocument {
   thread?: ThreadDetail;
   liveItems: Record<string, ThreadItem>;

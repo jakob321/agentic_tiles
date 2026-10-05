@@ -7,7 +7,7 @@ const api = vi.hoisted(() => ({
 
 vi.mock("../src/api", () => api);
 
-import { startTurn } from "../src/codex";
+import { enqueueMessage, startTurn, steerQueuedMessage } from "../src/codex";
 import { useAppStore } from "../src/store";
 import type { ThreadDetail } from "../src/types";
 
@@ -38,6 +38,7 @@ beforeEach(() => {
       },
     },
     threadSettings: {},
+    queues: {},
   });
 });
 
@@ -79,5 +80,66 @@ describe("starting a turn", () => {
 
     await expect(startTurn(thread.id, "hello")).rejects.toThrow("read-only");
     expect(useAppStore.getState().chats[thread.id].error).toContain("another Codex client");
+  });
+
+  it("adds follow-up messages to the durable thread queue", async () => {
+    api.codexRequest.mockResolvedValueOnce({
+      queuedSubmission: {
+        id: "queue-a",
+        input: [{ type: "text", text: "follow up" }],
+        clientUserMessageId: "client-a",
+      },
+    });
+
+    await enqueueMessage(thread.id, "follow up");
+
+    expect(api.codexRequest).toHaveBeenCalledWith(
+      "thread/queue/add",
+      expect.objectContaining({
+        threadId: thread.id,
+        input: [{ type: "text", text: "follow up" }],
+        clientUserMessageId: expect.any(String),
+      }),
+    );
+    expect(useAppStore.getState().queues[thread.id]).toHaveLength(1);
+  });
+
+  it("steers a queued message into the active turn before deleting it", async () => {
+    const submission = {
+      id: "queue-a",
+      input: [{ type: "text", text: "change direction" }],
+      clientUserMessageId: "client-a",
+    };
+    useAppStore.setState({
+      chats: {
+        [thread.id]: {
+          thread: {
+            ...thread,
+            turns: [{ id: "turn-a", status: "inProgress", items: [] }],
+          },
+          liveItems: {},
+          loading: false,
+          loaded: true,
+          resumed: true,
+          running: true,
+        },
+      },
+      queues: { [thread.id]: [submission] },
+    });
+    api.codexRequest.mockResolvedValueOnce({ turnId: "turn-a" }).mockResolvedValueOnce({});
+
+    await steerQueuedMessage(thread.id, submission);
+
+    expect(api.codexRequest).toHaveBeenNthCalledWith(1, "turn/steer", {
+      threadId: thread.id,
+      input: submission.input,
+      clientUserMessageId: submission.clientUserMessageId,
+      expectedTurnId: "turn-a",
+    });
+    expect(api.codexRequest).toHaveBeenNthCalledWith(2, "thread/queue/delete", {
+      threadId: thread.id,
+      queuedSubmissionId: submission.id,
+    });
+    expect(useAppStore.getState().queues[thread.id]).toEqual([]);
   });
 });
