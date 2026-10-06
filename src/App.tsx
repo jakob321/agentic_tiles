@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  getAgentInfo,
   getCodexInfo,
   isVsCodeHost,
   listenForAgentEvents,
@@ -8,7 +9,14 @@ import {
   saveWorkspace,
   setWindowZoom,
 } from "./api";
-import { fetchModels, fetchUsage, handleAgentEvent, refreshThreads } from "./codex";
+import {
+  fetchModels,
+  fetchProviderRateLimits,
+  fetchUsage,
+  handleAgentEvent,
+  refreshCodexUsage,
+  refreshThreads,
+} from "./codex";
 import { NewChatDialog } from "./components/NewChatDialog";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
@@ -25,6 +33,7 @@ export default function App() {
   const showArchived = useAppStore((state) => state.showArchived);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [codexVersion, setCodexVersion] = useState("");
+  const [claudeVersion, setClaudeVersion] = useState("");
   const sidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
@@ -62,12 +71,20 @@ export default function App() {
 
         const info = await getCodexInfo();
         setCodexVersion(info.version);
-        const [models, account] = await Promise.all([fetchModels(), fetchUsage(), refreshThreads()]);
+        const [models, account, claudeRateLimits, claudeInfo] = await Promise.all([
+          fetchModels(),
+          fetchUsage(),
+          fetchProviderRateLimits("claude"),
+          isVsCodeHost ? getAgentInfo("claude").catch(() => null) : Promise.resolve(null),
+          refreshThreads(),
+        ]);
         if (disposed) return;
         const store = useAppStore.getState();
         store.setModels(models);
         store.setUsage(account.usage);
         store.setRateLimits(account.rateLimits);
+        store.setProviderRateLimits("claude", claudeRateLimits);
+        setClaudeVersion(claudeInfo?.version ?? "");
         store.setConnected(true);
         store.setStartupError(null);
       } catch (error) {
@@ -87,6 +104,35 @@ export default function App() {
       stopConnection?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    let refreshing = false;
+    const refreshUsage = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const [, claudeRateLimits] = await Promise.all([
+          refreshCodexUsage(),
+          fetchProviderRateLimits("claude"),
+        ]);
+        useAppStore.getState().setProviderRateLimits("claude", claudeRateLimits);
+      } finally {
+        refreshing = false;
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshUsage();
+    };
+    const timer = window.setInterval(() => void refreshUsage(), 30_000);
+    window.addEventListener("focus", refreshUsage);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshUsage);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -138,8 +184,16 @@ export default function App() {
         <div className="sidebar-wrap" style={{ width: settings.sidebarWidth }}>
           <Sidebar
             codexVersion={codexVersion}
+            claudeVersion={claudeVersion}
+            showClaude={isVsCodeHost}
             onNewChat={() => setNewChatOpen(true)}
-            onReload={() => void refreshThreads()}
+            onReload={() => {
+              void refreshThreads();
+              void refreshCodexUsage();
+              void fetchProviderRateLimits("claude").then((rateLimits) =>
+                useAppStore.getState().setProviderRateLimits("claude", rateLimits),
+              );
+            }}
           />
           <div className="sidebar-resizer" onPointerDown={beginSidebarResize} />
         </div>

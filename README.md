@@ -34,6 +34,7 @@ every pane.
 - **Drag-and-drop layout** — drag a chat from the sidebar into an empty or occupied tile.
 - **Live agent activity** — follow messages, reasoning summaries, commands, tools, approvals, and
   clarification requests as they happen.
+- **Live provider usage** — see the remaining Codex and Claude allowance without reloading VS Code.
 - **Queue and steer follow-ups** — line up multiple prompts while an agent works, or send any
   queued message into the active turn immediately.
 - **Built-in change review** — inspect affected files and unified diffs directly in the chat.
@@ -68,7 +69,7 @@ Agentic Tiles launches the installed CLIs and does not bundle or replace them.
 cd vscode-extension
 npm ci
 npm run package
-code --install-extension dist/agentic-tiles-0.3.0.vsix
+code --install-extension dist/agentic-tiles-0.3.1.vsix
 ```
 
 Then click the **Agentic Tiles** layout icon in the editor title bar, or run

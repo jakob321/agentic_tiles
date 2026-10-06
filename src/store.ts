@@ -12,6 +12,7 @@ import {
 } from "./layout";
 import type {
   ApprovalRequest,
+  AgentProvider,
   ChatSettings,
   ChatDocument,
   CommandMessage,
@@ -66,6 +67,7 @@ interface AppState {
   models: ModelOption[];
   usage: UsageData | null;
   rateLimits: RateLimitData | null;
+  providerRateLimits: Record<AgentProvider, RateLimitData | null>;
   connected: boolean;
   startupError: string | null;
   hydrated: boolean;
@@ -78,6 +80,7 @@ interface AppState {
   setModels: (models: ModelOption[]) => void;
   setUsage: (usage: UsageData | null) => void;
   setRateLimits: (rateLimits: RateLimitData | null) => void;
+  setProviderRateLimits: (provider: AgentProvider, rateLimits: RateLimitData | null) => void;
   setConnected: (connected: boolean) => void;
   setStartupError: (error: string | null) => void;
   setSearch: (search: string) => void;
@@ -123,6 +126,7 @@ export const useAppStore = create<AppState>((set) => ({
   models: [],
   usage: null,
   rateLimits: null,
+  providerRateLimits: { codex: null, claude: null },
   connected: false,
   startupError: null,
   hydrated: false,
@@ -151,7 +155,16 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   setModels: (models) => set({ models }),
   setUsage: (usage) => set({ usage }),
-  setRateLimits: (rateLimits) => set({ rateLimits }),
+  setRateLimits: (rateLimits) =>
+    set((state) => ({
+      rateLimits,
+      providerRateLimits: { ...state.providerRateLimits, codex: rateLimits },
+    })),
+  setProviderRateLimits: (provider, rateLimits) =>
+    set((state) => ({
+      providerRateLimits: { ...state.providerRateLimits, [provider]: rateLimits },
+      ...(provider === "codex" ? { rateLimits } : {}),
+    })),
   setConnected: (connected) =>
     set((state) => ({
       connected,

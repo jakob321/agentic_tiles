@@ -272,6 +272,17 @@ select:focus {
   box-shadow: 0 18px 50px var(--shadow-color);
 }
 
+.usage-provider-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usage-provider-section + .usage-provider-section {
+  padding-top: 11px;
+  border-top: 1px solid var(--border);
+}
+
 .usage-metric {
   display: flex;
   justify-content: space-between;
@@ -351,7 +362,10 @@ select:focus {
 }
 
 .sidebar-usage summary {
+  display: flex;
   min-width: 48px;
+  align-items: center;
+  gap: 6px;
   padding: 6px 7px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -360,6 +374,15 @@ select:focus {
   text-align: center;
   cursor: pointer;
   list-style: none;
+}
+
+.usage-summary-codex,
+.usage-summary-claude {
+  white-space: nowrap;
+}
+
+.usage-summary-claude {
+  color: #d9a6ff;
 }
 
 .sidebar-usage summary::-webkit-details-marker {
@@ -835,6 +858,12 @@ select:focus {
   border: 0;
   box-shadow: none;
   outline: 1px solid var(--border-strong);
+}
+
+.chat-controls select option,
+.dialog-field select option {
+  background-color: var(--panel);
+  color: var(--text);
 }
 
 .chat-network {

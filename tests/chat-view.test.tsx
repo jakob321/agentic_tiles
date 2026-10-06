@@ -260,7 +260,7 @@ describe("chat view", () => {
     expect(command?.textContent).toContain("npm test");
   });
 
-  it("grows the composer to fit a long prompt", () => {
+  it("grows the composer to fit a long prompt", async () => {
     const threadId = "thread-long-prompt";
     useAppStore.setState({
       approvals: {},
@@ -302,6 +302,10 @@ describe("chat view", () => {
       setter?.call(textarea, "A long prompt\nwith several lines\nthat should expand the composer");
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
     });
+
+    await act(
+      () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve())),
+    );
 
     expect(textarea.style.height).toBe("176px");
   });

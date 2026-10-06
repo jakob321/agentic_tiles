@@ -1,15 +1,17 @@
 import { memo, useMemo } from "react";
 import { findTile } from "../layout";
 import { useAppStore } from "../store";
-import type { ThreadSummary } from "../types";
+import type { RateLimitData, ThreadSummary } from "../types";
 
 interface SidebarProps {
   codexVersion: string;
+  claudeVersion: string;
+  showClaude: boolean;
   onNewChat: () => void;
   onReload: () => void;
 }
 
-export function Sidebar({ codexVersion, onNewChat, onReload }: SidebarProps) {
+export function Sidebar({ codexVersion, claudeVersion, showClaude, onNewChat, onReload }: SidebarProps) {
   const threads = useAppStore((state) => state.threads);
   const search = useAppStore((state) => state.search);
   const showArchived = useAppStore((state) => state.showArchived);
@@ -21,11 +23,14 @@ export function Sidebar({ codexVersion, onNewChat, onReload }: SidebarProps) {
   const connected = useAppStore((state) => state.connected);
   const usage = useAppStore((state) => state.usage);
   const rateLimits = useAppStore((state) => state.rateLimits);
+  const providerRateLimits = useAppStore((state) => state.providerRateLimits);
   const focusedThreadId = useAppStore(
     (state) => findTile(state.layout, state.focusedTileId)?.activeTab ?? null,
   );
-  const usedPercent = rateLimits?.rateLimits?.primary?.usedPercent;
-  const leftPercent = remainingPercent(usedPercent);
+  const codexLimits = providerRateLimits.codex?.rateLimits ?? rateLimits?.rateLimits;
+  const claudeLimits = providerRateLimits.claude?.rateLimits;
+  const codexLeft = remainingPercent(codexLimits?.primary?.usedPercent);
+  const claudeLeft = remainingPercent(claudeLimits?.primary?.usedPercent);
 
   const visibleThreads = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase();
@@ -46,18 +51,24 @@ export function Sidebar({ codexVersion, onNewChat, onReload }: SidebarProps) {
         </div>
         <div className="sidebar-heading-actions">
           <details className="sidebar-usage">
-            <summary title="Codex account usage">
-              {leftPercent === undefined ? "Usage" : `${leftPercent}% left`}
+            <summary title="Codex and Claude account usage">
+              <span className="usage-summary-codex">C {percentLeft(codexLeft)}</span>
+              {showClaude && <span className="usage-summary-claude">Cl {percentLeft(claudeLeft)}</span>}
             </summary>
             <div className="usage-popover">
-              <strong>Codex usage</strong>
-              <Metric label="Plan" value={rateLimits?.rateLimits?.planType ?? "—"} />
-              <Metric
-                label="Current window"
-                value={leftPercent === undefined ? "—" : `${leftPercent}% left`}
+              <UsageSection
+                name="Codex"
+                limits={codexLimits}
+                version={codexVersion || "Codex CLI"}
+                lifetimeTokens={usage?.summary?.lifetimeTokens}
               />
-              <Metric label="Lifetime tokens" value={formatNumber(usage?.summary?.lifetimeTokens)} />
-              <span className="version-label">{codexVersion || "Codex CLI"}</span>
+              {showClaude && (
+                <UsageSection
+                  name="Claude"
+                  limits={claudeLimits}
+                  version={claudeVersion || "Claude CLI"}
+                />
+              )}
             </div>
           </details>
           <button className="icon-button" onClick={onNewChat} title="New chat" aria-label="New chat">
@@ -157,6 +168,45 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function UsageSection({
+  name,
+  limits,
+  version,
+  lifetimeTokens,
+}: {
+  name: string;
+  limits: RateLimitData["rateLimits"] | undefined;
+  version: string;
+  lifetimeTokens?: number;
+}) {
+  const primaryLeft = remainingPercent(limits?.primary?.usedPercent);
+  const secondaryLeft = remainingPercent(limits?.secondary?.usedPercent);
+  return (
+    <section className="usage-provider-section">
+      <strong>{name}</strong>
+      <Metric label={windowLabel(limits?.primary?.windowDurationMins, "Current window")} value={percentLeft(primaryLeft)} />
+      {limits?.secondary && (
+        <Metric label={windowLabel(limits.secondary.windowDurationMins, "Weekly")} value={percentLeft(secondaryLeft)} />
+      )}
+      {lifetimeTokens !== undefined && <Metric label="Lifetime tokens" value={formatNumber(lifetimeTokens)} />}
+      <span className="version-label">{version}</span>
+    </section>
+  );
+}
+
+function percentLeft(value?: number): string {
+  return value === undefined ? "—" : `${value}% left`;
+}
+
+function windowLabel(minutes: number | undefined, fallback: string): string {
+  if (!minutes) return fallback;
+  if (minutes === 300) return "5-hour window";
+  if (minutes === 10_080) return "Weekly window";
+  if (minutes % 1440 === 0) return `${minutes / 1440}-day window`;
+  if (minutes % 60 === 0) return `${minutes / 60}-hour window`;
+  return fallback;
 }
 
 function formatNumber(value?: number): string {

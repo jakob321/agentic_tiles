@@ -19,6 +19,7 @@ or subscription.
 - Keep independent browser-style tabs in every tile.
 - Drag chats from the searchable sidebar into any tile.
 - Choose Codex or Claude when creating each conversation.
+- See live percentage-remaining usage counters for both providers.
 - Follow live messages, reasoning, commands, tools, approvals, and agent questions.
 - Queue multiple follow-up messages while an agent is working, then steer any one into the active turn.
 - Review changed files and unified diffs directly in the conversation.
@@ -76,5 +77,5 @@ npm run package
 Install the generated package with **Extensions: Install from VSIX...** or:
 
 ```bash
-code --install-extension dist/agentic-tiles-0.3.0.vsix
+code --install-extension dist/agentic-tiles-0.3.1.vsix
 ```

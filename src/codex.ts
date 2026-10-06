@@ -89,6 +89,22 @@ export async function fetchUsage(): Promise<{
   return { usage, rateLimits };
 }
 
+export async function fetchProviderRateLimits(
+  provider: AgentProvider,
+): Promise<RateLimitData | null> {
+  if (provider === "codex") {
+    return codexRequest<RateLimitData>("account/rateLimits/read", {}).catch(() => null);
+  }
+  return agentRequest<RateLimitData>(provider, "account/rateLimits/read", {}).catch(() => null);
+}
+
+export async function refreshCodexUsage(): Promise<void> {
+  const account = await fetchUsage();
+  const store = useAppStore.getState();
+  store.setUsage(account.usage);
+  store.setRateLimits(account.rateLimits);
+}
+
 export async function loadChat(threadId: string, force = false): Promise<void> {
   const state = useAppStore.getState();
   const provider = providerForThread(threadId);
@@ -297,7 +313,7 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
 
   if (command === "/usage") {
     if (provider === "claude") {
-      addResult("Claude usage details are not exposed through this CLI integration yet.");
+      await startTurn(threadId, input.trim());
       return;
     }
     const mode = (args[0] ?? "overview").toLocaleLowerCase();
@@ -382,6 +398,10 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
     return;
   }
 
+  if (provider === "claude") {
+    await startTurn(threadId, input.trim());
+    return;
+  }
   addResult(`Unknown command: ${rawCommand}\nRun /help to see supported commands.`, "error");
 }
 
@@ -577,6 +597,13 @@ export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope
   const params = message.params ?? {};
   const threadId = typeof params.threadId === "string" ? params.threadId : undefined;
 
+  if (method === "account/rateLimits/updated" && params.rateLimits) {
+    store.setProviderRateLimits(provider, {
+      rateLimits: params.rateLimits as RateLimitData["rateLimits"],
+    });
+    return;
+  }
+
   if (method === "item/tool/requestUserInput" && threadId && message.id !== undefined) {
     store.addUserInputRequest(threadId, {
       requestId: message.id,
@@ -634,6 +661,7 @@ export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope
     window.setTimeout(() => {
       void loadChat(threadId, true);
       void refreshThreads();
+      if (provider === "codex") void refreshCodexUsage();
     }, 100);
     return;
   }

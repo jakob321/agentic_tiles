@@ -48,6 +48,7 @@ describe("Claude conversation adapter", () => {
     writeFileSync(
       executable,
       `#!/usr/bin/env bash
+printf '%s\\n' '{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{"five_hour":{"utilization":0.25,"resetsAt":123},"seven_day":{"utilization":0.1,"resetsAt":456}}}}'
 printf '%s\\n' '{"type":"assistant","uuid":"event-1","message":{"model":"claude-test","content":[{"type":"text","text":"hello from Claude"}]}}'
 printf '%s\\n' '{"type":"result","is_error":false,"result":"hello from Claude"}'
 `,
@@ -83,6 +84,11 @@ printf '%s\\n' '{"type":"result","is_error":false,"result":"hello from Claude"}'
     }>("thread/read", { threadId: created.thread.id });
     expect(response.thread.turns[0].status).toBe("completed");
     expect(response.thread.turns[0].items.some((item) => item.text === "hello from Claude")).toBe(true);
+    const usage = await client.request<{
+      rateLimits: { primary: { usedPercent: number }; secondary: { usedPercent: number } };
+    }>("account/rateLimits/read", {});
+    expect(usage.rateLimits.primary.usedPercent).toBe(25);
+    expect(usage.rateLimits.secondary.usedPercent).toBe(10);
     expect(saved).toBeTruthy();
     client.dispose();
   });

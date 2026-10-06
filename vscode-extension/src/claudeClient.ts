@@ -48,6 +48,16 @@ interface PersistedClaudeState {
   version: 1;
   threads: ClaudeThread[];
   queues: Record<string, QueuedSubmission[]>;
+  usage: ClaudeRateLimitData | null;
+  usageUpdatedAt: number;
+}
+
+interface ClaudeRateLimitData {
+  rateLimits: {
+    primary?: { usedPercent: number; windowDurationMins: number; resetsAt?: number };
+    secondary?: { usedPercent: number; windowDurationMins: number; resetsAt?: number };
+    planType: string;
+  };
 }
 
 interface ActiveTurn {
@@ -66,6 +76,9 @@ export class ClaudeClient {
   private readonly lastTurnOptions = new Map<string, Record<string, unknown>>();
   private readonly steered = new Map<string, string>();
   private saveChain = Promise.resolve();
+  private usage: ClaudeRateLimitData | null;
+  private usageUpdatedAt: number;
+  private usageRefresh?: Promise<ClaudeRateLimitData>;
   private disposed = false;
 
   constructor(
@@ -76,6 +89,8 @@ export class ClaudeClient {
     private readonly log: (line: string) => void,
   ) {
     const persisted = normalizeState(state);
+    this.usage = persisted.usage;
+    this.usageUpdatedAt = persisted.usageUpdatedAt;
     for (const thread of persisted.threads) {
       thread.status = { type: "idle" };
       for (const turn of thread.turns) {
@@ -118,6 +133,8 @@ export class ClaudeClient {
         return { thread: this.thread(String(params.threadId ?? "")) } as T;
       case "thread/settings/update":
         return null as T;
+      case "account/rateLimits/read":
+        return (await this.readUsage()) as T;
       case "turn/start":
         return (await this.startTurn(params)) as T;
       case "turn/interrupt":
@@ -260,6 +277,12 @@ export class ClaudeClient {
     const turn = thread?.turns.find((item) => item.id === active?.turnId);
     if (!thread || !active || !turn) return;
 
+    if (event.type === "rate_limit_event") {
+      const usage = usageFromRateLimitEvent(event);
+      if (usage) this.updateUsage(usage);
+      return;
+    }
+
     if (event.type === "assistant") {
       const message = record(event.message);
       const content = Array.isArray(message.content) ? message.content : [];
@@ -271,6 +294,10 @@ export class ClaudeClient {
         if (existing >= 0) turn.items[existing] = item;
         else turn.items.push(item);
         this.emit({ method: "item/completed", params: { threadId, item } });
+        if (item.type === "agentMessage" && typeof item.text === "string") {
+          const usage = usageFromCommandText(item.text);
+          if (usage) this.updateUsage(usage);
+        }
       });
       if (typeof message.model === "string") thread.model = message.model;
     }
@@ -401,6 +428,56 @@ export class ClaudeClient {
     this.emit({ method: "thread/queue/changed", params: { threadId } });
   }
 
+  private updateUsage(usage: ClaudeRateLimitData): void {
+    this.usage = usage;
+    this.usageUpdatedAt = Date.now();
+    this.persist();
+    this.emit({
+      method: "account/rateLimits/updated",
+      params: { rateLimits: usage.rateLimits },
+    });
+  }
+
+  private async readUsage(): Promise<ClaudeRateLimitData> {
+    if (this.usage && Date.now() - this.usageUpdatedAt < 60_000) return this.usage;
+    if (this.usageRefresh) return this.usageRefresh;
+    this.usageRefresh = this.refreshUsageFromCli().finally(() => {
+      this.usageRefresh = undefined;
+    });
+    return this.usageRefresh;
+  }
+
+  private async refreshUsageFromCli(): Promise<ClaudeRateLimitData> {
+    const fallback = this.usage ?? { rateLimits: { planType: "Claude" } };
+    const executable = findClaude(this.configuredPath);
+    if (!executable) return fallback;
+    try {
+      const { stdout } = await execFileAsync(
+        executable,
+        ["-p", "/usage", "--output-format", "json"],
+        {
+          env: {
+            ...environmentFor(executable),
+            CLAUDE_REMOTE_CWD: this.latestCwd(),
+          },
+        },
+      );
+      const result = record(JSON.parse(stdout));
+      const usage = usageFromCommandText(String(result.result ?? ""));
+      if (usage) {
+        this.updateUsage(usage);
+        return usage;
+      }
+    } catch (error) {
+      this.log(`Unable to refresh Claude usage: ${String(error)}`);
+    }
+    return fallback;
+  }
+
+  private latestCwd(): string {
+    return [...this.threads.values()].sort((a, b) => b.updatedAt - a.updatedAt)[0]?.cwd ?? "/home/user";
+  }
+
   private thread(threadId: string): ClaudeThread {
     const thread = this.threads.get(threadId);
     if (!thread) throw new Error(`Claude thread not found: ${threadId}`);
@@ -412,6 +489,8 @@ export class ClaudeClient {
       version: 1,
       threads: [...this.threads.values()],
       queues: Object.fromEntries(this.queues),
+      usage: this.usage,
+      usageUpdatedAt: this.usageUpdatedAt,
     };
     this.saveChain = this.saveChain
       .then(() => this.save(state))
@@ -533,6 +612,44 @@ function normalizeState(value: unknown): PersistedClaudeState {
     queues: state.queues && typeof state.queues === "object"
       ? (state.queues as Record<string, QueuedSubmission[]>)
       : {},
+    usage: state.usage && typeof state.usage === "object"
+      ? (state.usage as ClaudeRateLimitData)
+      : null,
+    usageUpdatedAt: typeof state.usageUpdatedAt === "number" ? state.usageUpdatedAt : 0,
+  };
+}
+
+function usageFromRateLimitEvent(event: Record<string, unknown>): ClaudeRateLimitData | null {
+  const info = record(event.rate_limit_info);
+  const windows = record(info.unifiedWindows);
+  const primary = usageWindow(record(windows.five_hour), 300);
+  const secondary = usageWindow(record(windows.seven_day), 10_080);
+  if (!primary && !secondary) return null;
+  return { rateLimits: { primary, secondary, planType: "Claude" } };
+}
+
+function usageFromCommandText(text: string): ClaudeRateLimitData | null {
+  const session = text.match(/Current session:\s*(\d+(?:\.\d+)?)% used/i);
+  const week = text.match(/Current week[^:]*:\s*(\d+(?:\.\d+)?)% used/i);
+  if (!session && !week) return null;
+  return {
+    rateLimits: {
+      primary: session ? { usedPercent: Number(session[1]), windowDurationMins: 300 } : undefined,
+      secondary: week ? { usedPercent: Number(week[1]), windowDurationMins: 10_080 } : undefined,
+      planType: "Claude",
+    },
+  };
+}
+
+function usageWindow(
+  window: Record<string, any>,
+  windowDurationMins: number,
+): { usedPercent: number; windowDurationMins: number; resetsAt?: number } | undefined {
+  if (typeof window.utilization !== "number") return undefined;
+  return {
+    usedPercent: window.utilization * 100,
+    windowDurationMins,
+    ...(typeof window.resetsAt === "number" ? { resetsAt: window.resetsAt } : {}),
   };
 }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Added live Codex and Claude usage counters with five-hour and weekly limits where available.
+- Passed Claude-native slash commands such as `/usage` through to the Claude CLI.
+- Fixed native model and settings dropdown colors in VS Code themes.
+- Isolated the composer render path to keep typing responsive in long conversations.
+
 ## 0.3.0
 
 - Added Codex or Claude CLI selection when creating a conversation.

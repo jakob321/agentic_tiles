@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { copyText, isVsCodeHost, openLocalPath, revealLocalPath } from "../api";
@@ -43,14 +43,7 @@ export function ChatView({ threadId }: { threadId: string }) {
   const userInputRequests = useAppStore(
     (state) => state.userInputRequests[threadId] ?? NO_USER_INPUT_REQUESTS,
   );
-  const queuedSubmissions = useAppStore(
-    (state) => state.queues[threadId] ?? NO_QUEUED_SUBMISSIONS,
-  );
-  const [message, setMessage] = useState("");
-  const [sending, setSending] = useState(false);
-  const [steeringId, setSteeringId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const composerRef = useRef<HTMLTextAreaElement>(null);
   const initialScrollThreadRef = useRef<string | null>(null);
   const provider = chat?.thread?.provider ?? (threadId.startsWith("claude:") ? "claude" : "codex");
   const agentName = provider === "claude" ? "Claude" : "Codex";
@@ -79,39 +72,9 @@ export function ChatView({ threadId }: { threadId: string }) {
     if (nearBottom) element.scrollTop = element.scrollHeight;
   }, [threadId, items.length, commandMessages.length, userInputRequests.length, chat?.loaded, chat?.running]);
 
-  useLayoutEffect(() => {
-    const element = composerRef.current;
-    if (!element) return;
-    element.style.height = "auto";
-    element.style.height = `${Math.max(COMPOSER_MIN_HEIGHT, element.scrollHeight)}px`;
-  }, [message, threadId]);
-
-  const slashSuggestions = message.startsWith("/") && !message.includes(" ")
-    ? SLASH_COMMANDS.filter((item) => item.name.startsWith(message.toLocaleLowerCase()))
-    : [];
   const showThinking = Boolean(
     chat?.running && approvals.length === 0 && userInputRequests.length === 0,
   );
-
-  const submit = async () => {
-    const text = message.trim();
-    if (!text || sending) return;
-    setMessage("");
-    setSending(true);
-    try {
-      if (text.startsWith("/")) {
-        await runSlashCommand(threadId, text);
-      } else if (chat?.running) {
-        await enqueueMessage(threadId, text);
-      } else {
-        await startTurn(threadId, text);
-      }
-    } catch {
-      setMessage(text);
-    } finally {
-      setSending(false);
-    }
-  };
 
   if (chat?.loading && !chat.thread) {
     return <div className="chat-placeholder">Loading conversation…</div>;
@@ -153,93 +116,149 @@ export function ChatView({ threadId }: { threadId: string }) {
         )}
       </div>
 
-      <div className="composer-shell">
-        {slashSuggestions.length > 0 && (
-          <div className="slash-suggestions">
-            {slashSuggestions.map((item) => (
-              <button
-                key={item.name}
-                type="button"
-                onClick={() => {
-                  setMessage(`${item.name} `);
-                  composerRef.current?.focus();
-                }}
-              >
-                <code>{item.name}</code>
-                <span>{item.description}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {queuedSubmissions.length > 0 && (
-          <div className="queued-messages" aria-label="Queued messages">
-            <div className="queued-messages-heading">
-              <span>Queued</span>
-              <small>{queuedSubmissions.length}</small>
-            </div>
-            {queuedSubmissions.map((submission) => (
-              <div className="queued-message" key={submission.id}>
-                <span title={queuedSubmissionText(submission)}>
-                  {queuedSubmissionText(submission) || "Queued attachment"}
-                </span>
-                <button
-                  type="button"
-                  disabled={steeringId !== null}
-                  onClick={() => {
-                    setSteeringId(submission.id);
-                    void steerQueuedMessage(threadId, submission)
-                      .catch(() => undefined)
-                      .finally(() => setSteeringId(null));
-                  }}
-                  title="Send this guidance to the current turn now"
-                >
-                  {steeringId === submission.id ? "Steering…" : "Steer"}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <textarea
-          ref={composerRef}
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-          placeholder={
-            chat?.running
-              ? "Queue a follow-up or type / for commands"
-              : `Message ${agentName} or type / for commands`
-          }
-          disabled={sending}
-          rows={2}
-        />
-        <div className="composer-actions">
-          <button
-            className="composer-action"
-            onClick={() => void submit()}
-            disabled={!message.trim() || sending}
-            title={chat?.running ? "Queue message" : "Send message"}
-          >
-            ↑
-          </button>
-          {chat?.running && (
-            <button
-              className="composer-action stop-action"
-              onClick={() => void interruptThread(threadId)}
-              title="Interrupt turn"
-            >
-              ■
-            </button>
-          )}
-        </div>
-      </div>
+      <ChatComposer threadId={threadId} />
     </div>
   );
 }
+
+const ChatComposer = memo(function ChatComposer({ threadId }: { threadId: string }) {
+  const running = useAppStore((state) => state.chats[threadId]?.running ?? false);
+  const provider = useAppStore(
+    (state) =>
+      state.chats[threadId]?.thread?.provider ??
+      state.threads.find((thread) => thread.id === threadId)?.provider ??
+      (threadId.startsWith("claude:") ? "claude" : "codex"),
+  );
+  const queuedSubmissions = useAppStore(
+    (state) => state.queues[threadId] ?? NO_QUEUED_SUBMISSIONS,
+  );
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [steeringId, setSteeringId] = useState<string | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const agentName = provider === "claude" ? "Claude" : "Codex";
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const element = composerRef.current;
+      if (!element) return;
+      element.style.height = "auto";
+      element.style.height = `${Math.max(COMPOSER_MIN_HEIGHT, element.scrollHeight)}px`;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [message, threadId]);
+
+  const slashSuggestions = message.startsWith("/") && !message.includes(" ")
+    ? SLASH_COMMANDS.filter((item) => item.name.startsWith(message.toLocaleLowerCase()))
+    : [];
+
+  const submit = async () => {
+    const text = message.trim();
+    if (!text || sending) return;
+    setMessage("");
+    setSending(true);
+    try {
+      if (text.startsWith("/")) {
+        await runSlashCommand(threadId, text);
+      } else if (running) {
+        await enqueueMessage(threadId, text);
+      } else {
+        await startTurn(threadId, text);
+      }
+    } catch {
+      setMessage(text);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="composer-shell">
+      {slashSuggestions.length > 0 && (
+        <div className="slash-suggestions">
+          {slashSuggestions.map((item) => (
+            <button
+              key={item.name}
+              type="button"
+              onClick={() => {
+                setMessage(`${item.name} `);
+                composerRef.current?.focus();
+              }}
+            >
+              <code>{item.name}</code>
+              <span>{item.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {queuedSubmissions.length > 0 && (
+        <div className="queued-messages" aria-label="Queued messages">
+          <div className="queued-messages-heading">
+            <span>Queued</span>
+            <small>{queuedSubmissions.length}</small>
+          </div>
+          {queuedSubmissions.map((submission) => (
+            <div className="queued-message" key={submission.id}>
+              <span title={queuedSubmissionText(submission)}>
+                {queuedSubmissionText(submission) || "Queued attachment"}
+              </span>
+              <button
+                type="button"
+                disabled={steeringId !== null}
+                onClick={() => {
+                  setSteeringId(submission.id);
+                  void steerQueuedMessage(threadId, submission)
+                    .catch(() => undefined)
+                    .finally(() => setSteeringId(null));
+                }}
+                title="Send this guidance to the current turn now"
+              >
+                {steeringId === submission.id ? "Steering…" : "Steer"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <textarea
+        ref={composerRef}
+        value={message}
+        onChange={(event) => setMessage(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            void submit();
+          }
+        }}
+        placeholder={
+          running
+            ? "Queue a follow-up or type / for commands"
+            : `Message ${agentName} or type / for commands`
+        }
+        disabled={sending}
+        rows={2}
+      />
+      <div className="composer-actions">
+        <button
+          className="composer-action"
+          onClick={() => void submit()}
+          disabled={!message.trim() || sending}
+          title={running ? "Queue message" : "Send message"}
+        >
+          ↑
+        </button>
+        {running && (
+          <button
+            className="composer-action stop-action"
+            onClick={() => void interruptThread(threadId)}
+            title="Interrupt turn"
+          >
+            ■
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
 
 function UserInputCard({ request }: { request: UserInputRequest }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});

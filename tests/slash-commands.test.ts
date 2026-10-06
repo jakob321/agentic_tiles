@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
+  agentRequest: vi.fn(),
   codexRequest: vi.fn(),
   codexRespond: vi.fn(),
 }));
@@ -12,6 +13,7 @@ import { useAppStore } from "../src/store";
 
 beforeEach(() => {
   api.codexRequest.mockReset();
+  api.agentRequest.mockReset();
   const thread = {
     id: "thread-a",
     preview: "Conversation",
@@ -81,5 +83,35 @@ describe("slash commands", () => {
       }),
     );
     expect(useAppStore.getState().threadSettings["thread-a"].collaborationMode).toBe("plan");
+  });
+
+  it("passes Claude native slash commands to the Claude CLI", async () => {
+    const state = useAppStore.getState();
+    const thread = { ...state.threads[0], id: "claude:thread-a", provider: "claude" as const };
+    useAppStore.setState({
+      threads: [thread],
+      chats: {
+        [thread.id]: {
+          thread: { ...thread, turns: [] },
+          liveItems: {},
+          loading: false,
+          loaded: true,
+          resumed: true,
+          running: false,
+        },
+      },
+    });
+    api.agentRequest.mockResolvedValue({});
+
+    await runSlashCommand(thread.id, "/usage");
+
+    expect(api.agentRequest).toHaveBeenCalledWith(
+      "claude",
+      "turn/start",
+      expect.objectContaining({
+        threadId: thread.id,
+        input: [{ type: "text", text: "/usage" }],
+      }),
+    );
   });
 });

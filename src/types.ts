@@ -193,6 +193,11 @@ export interface RateLimitData {
       windowDurationMins?: number;
       resetsAt?: number;
     };
+    secondary?: {
+      usedPercent?: number;
+      windowDurationMins?: number;
+      resetsAt?: number;
+    };
     planType?: string;
     credits?: { balance?: string; hasCredits?: boolean };
   };

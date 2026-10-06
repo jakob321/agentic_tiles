@@ -4,6 +4,10 @@ All notable changes to Agentic Tiles are documented here.
 
 ## Unreleased
 
+- Added live per-provider usage counters for Codex and Claude in the VS Code extension.
+- Added Claude-native slash-command forwarding and cached `/usage` refreshes.
+- Fixed themed dropdown menus and removed full-chat rerenders from composer keystrokes.
+
 ## Desktop 0.4.2 / VS Code 0.2.2
 
 - Tightened command-row spacing and removed all command-text backgrounds, borders, and shadows.
