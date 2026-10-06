@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { CodexEnvelope, JsonValue, PersistedWorkspace } from "./types";
+import type { AgentProvider, CodexEnvelope, JsonValue, PersistedWorkspace } from "./types";
 
 interface VsCodeApi {
   postMessage: (message: unknown) => void;
@@ -17,7 +17,7 @@ interface HostResponse {
 
 interface HostEvent {
   type: "event";
-  event: "codex" | "connection";
+  event: "agent" | "codex" | "connection";
   payload: unknown;
 }
 
@@ -36,6 +36,7 @@ const hostRequests = new Map<
   { resolve: (value: unknown) => void; reject: (reason: Error) => void }
 >();
 const codexListeners = new Set<(event: CodexEnvelope) => void>();
+const agentListeners = new Set<(provider: AgentProvider, event: CodexEnvelope) => void>();
 const connectionListeners = new Set<(connected: boolean) => void>();
 
 if (vscode) {
@@ -51,6 +52,13 @@ if (vscode) {
     }
     if (message?.type === "event" && message.event === "codex") {
       codexListeners.forEach((listener) => listener(message.payload as CodexEnvelope));
+      agentListeners.forEach((listener) => listener("codex", message.payload as CodexEnvelope));
+    }
+    if (message?.type === "event" && message.event === "agent") {
+      const payload = message.payload as { provider?: AgentProvider; message?: CodexEnvelope };
+      if (payload.provider && payload.message) {
+        agentListeners.forEach((listener) => listener(payload.provider!, payload.message!));
+      }
     }
     if (message?.type === "event" && message.event === "connection") {
       const payload = message.payload as { connected?: boolean };
@@ -81,6 +89,16 @@ export async function codexRequest<T = unknown>(
   return invoke<T>("codex_request", { method, params });
 }
 
+export async function agentRequest<T = unknown>(
+  provider: AgentProvider,
+  method: string,
+  params: Record<string, unknown> = {},
+): Promise<T> {
+  if (vscode) return hostRequest<T>("agent.request", { provider, method, params });
+  if (provider !== "codex") throw new Error("Claude chats are currently available in the VS Code extension only.");
+  return invoke<T>("codex_request", { method, params });
+}
+
 export async function codexRespond(id: JsonValue, result: Record<string, unknown>): Promise<void> {
   if (vscode) return hostRequest<void>("codex.respond", { id, result });
   await invoke("codex_respond", { id, result });
@@ -92,6 +110,16 @@ export async function getCodexInfo(): Promise<{
   running: boolean;
 }> {
   if (vscode) return hostRequest("codex.info");
+  return invoke("codex_info");
+}
+
+export async function getAgentInfo(provider: AgentProvider): Promise<{
+  path: string;
+  version: string;
+  running: boolean;
+}> {
+  if (vscode) return hostRequest("agent.info", { provider });
+  if (provider !== "codex") throw new Error("Claude chats are currently available in the VS Code extension only.");
   return invoke("codex_info");
 }
 
@@ -113,6 +141,16 @@ export async function listenForCodexEvents(
     return () => codexListeners.delete(handler);
   }
   return listen<CodexEnvelope>("codex-event", ({ payload }) => handler(payload));
+}
+
+export async function listenForAgentEvents(
+  handler: (provider: AgentProvider, event: CodexEnvelope) => void,
+): Promise<UnlistenFn> {
+  if (vscode) {
+    agentListeners.add(handler);
+    return () => agentListeners.delete(handler);
+  }
+  return listen<CodexEnvelope>("codex-event", ({ payload }) => handler("codex", payload));
 }
 
 export async function listenForConnection(

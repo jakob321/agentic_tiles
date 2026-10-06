@@ -139,6 +139,9 @@ const ChatRow = memo(function ChatRow({
       <span className="chat-row-copy">
         <span className="chat-row-title">{title}</span>
         <span className="chat-row-meta">
+          <span className={`chat-provider provider-${thread.provider ?? "codex"}`}>
+            {thread.provider === "claude" ? "Claude" : "Codex"}
+          </span>
           {project} · {relativeTime(thread.updatedAt)}
         </span>
       </span>

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { isAbsolute, resolve } from "node:path";
 import { CodexClient, type JsonValue } from "./codexClient";
+import { ClaudeClient } from "./claudeClient";
 
 interface WebviewRequest {
   type: "request";
@@ -11,8 +12,10 @@ interface WebviewRequest {
 
 const panelType = "agenticTiles.main";
 const stateKey = "agenticTiles.workspace";
+const claudeStateKey = "agenticTiles.claudeChats";
 let currentPanel: vscode.WebviewPanel | undefined;
 let currentClient: CodexClient | undefined;
+let currentClaudeClient: ClaudeClient | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel("Agentic Tiles", { log: true });
@@ -59,12 +62,34 @@ function configurePanel(
   panel.webview.html = webviewHtml(panel.webview, context.extensionUri);
 
   const configuredPath = vscode.workspace.getConfiguration("agenticTiles").get<string>("codexPath", "");
+  const configuredClaudePath = vscode.workspace.getConfiguration("agenticTiles").get<string>("claudePath", "");
   const client = new CodexClient(configuredPath, (line) => output.info(line));
+  const claudeClient = new ClaudeClient(
+    configuredClaudePath,
+    context.globalState.get(claudeStateKey),
+    async (state) => {
+      await context.globalState.update(claudeStateKey, state);
+    },
+    (message) => {
+      void panel.webview.postMessage({
+        type: "event",
+        event: "agent",
+        payload: { provider: "claude", message },
+      });
+    },
+    (line) => output.info(line),
+  );
   currentClient?.dispose();
+  currentClaudeClient?.dispose();
   currentClient = client;
+  currentClaudeClient = claudeClient;
 
   const stopEvents = client.onEvent((payload) => {
-    void panel.webview.postMessage({ type: "event", event: "codex", payload });
+    void panel.webview.postMessage({
+      type: "event",
+      event: "agent",
+      payload: { provider: "codex", message: payload },
+    });
   });
   const stopConnection = client.onConnection((connected) => {
     void panel.webview.postMessage({ type: "event", event: "connection", payload: { connected } });
@@ -73,7 +98,7 @@ function configurePanel(
   const messageSubscription = panel.webview.onDidReceiveMessage(async (message: WebviewRequest) => {
     if (message?.type !== "request" || typeof message.id !== "number") return;
     try {
-      const result = await handleRequest(message, client, context);
+      const result = await handleRequest(message, client, claudeClient, context);
       await panel.webview.postMessage({ type: "response", id: message.id, result });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -87,14 +112,17 @@ function configurePanel(
     stopConnection();
     messageSubscription.dispose();
     client.dispose();
+    claudeClient.dispose();
     if (currentPanel === panel) currentPanel = undefined;
     if (currentClient === client) currentClient = undefined;
+    if (currentClaudeClient === claudeClient) currentClaudeClient = undefined;
   });
 }
 
 async function handleRequest(
   request: WebviewRequest,
   client: CodexClient,
+  claudeClient: ClaudeClient,
   context: vscode.ExtensionContext,
 ): Promise<unknown> {
   const params = request.params ?? {};
@@ -105,6 +133,12 @@ async function handleRequest(
       return client.respond(params.id as JsonValue, asRecord(params.result));
     case "codex.info":
       return client.info();
+    case "agent.request":
+      return params.provider === "claude"
+        ? claudeClient.request(String(params.method), asRecord(params.params))
+        : client.request(String(params.method), asRecord(params.params));
+    case "agent.info":
+      return params.provider === "claude" ? claudeClient.info() : client.info();
     case "workspace.load":
       return context.globalState.get(stateKey, null);
     case "workspace.save":
@@ -133,7 +167,7 @@ async function handleRequest(
         canSelectMany: false,
         defaultUri: defaultPath ? vscode.Uri.file(defaultPath) : firstWorkspaceFolder(),
         openLabel: "Use folder",
-        title: "Choose the Codex working directory",
+        title: "Choose the agent working directory",
       });
       return selected?.[0]?.fsPath ?? null;
     }
@@ -187,4 +221,5 @@ function randomNonce(): string {
 
 export function deactivate(): void {
   currentClient?.dispose();
+  currentClaudeClient?.dispose();
 }

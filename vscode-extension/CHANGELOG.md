@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Added Codex or Claude CLI selection when creating a conversation.
+- Added persistent Claude sessions with streaming messages, tools, interruption, and queued follow-ups.
+- Added provider badges and provider-specific model and reasoning controls.
+- Added `agenticTiles.claudePath` for local installations and remote launcher scripts.
+
 ## 0.2.2
 
 - Tightened command-row spacing and removed all command-text backgrounds, borders, and shadows.

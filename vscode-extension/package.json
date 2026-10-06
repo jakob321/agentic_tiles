@@ -1,8 +1,8 @@
 {
   "name": "agentic-tiles",
   "displayName": "Agentic Tiles",
-  "description": "Run multiple Codex CLI conversations in a persistent tiled VS Code workspace.",
-  "version": "0.2.2",
+  "description": "Run Codex and Claude CLI conversations in a persistent tiled VS Code workspace.",
+  "version": "0.3.0",
   "publisher": "jakob321",
   "license": "MIT",
   "icon": "media/agentic-tiles.png",
@@ -19,8 +19,20 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Other", "Machine Learning"],
-  "keywords": ["codex", "ai", "agents", "chat", "tiles", "multi-agent", "parallel"],
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "codex",
+    "claude",
+    "ai",
+    "agents",
+    "chat",
+    "tiles",
+    "multi-agent",
+    "parallel"
+  ],
   "activationEvents": [
     "onCommand:agenticTiles.open",
     "onWebviewPanel:agenticTiles.main"
@@ -50,6 +62,11 @@
           "type": "string",
           "default": "",
           "description": "Optional absolute path to the Codex CLI executable. Leave empty to auto-detect it."
+        },
+        "agenticTiles.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to the Claude CLI executable or remote launcher. Leave empty to auto-detect it."
         }
       }
     }
@@ -62,7 +79,7 @@
     "build:webview": "esbuild ../src/main.tsx --bundle --minify --define:process.env.NODE_ENV='\"production\"' --platform=browser --format=iife --outfile=dist/webview.js",
     "build": "npm run clean && npm run typecheck && npm run build:host && npm run build:webview",
     "test": "vitest run",
-    "package": "vsce package --out dist/agentic-tiles-0.2.2.vsix"
+    "package": "vsce package --out dist/agentic-tiles-0.3.0.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

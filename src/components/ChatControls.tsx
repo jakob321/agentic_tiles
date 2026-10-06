@@ -21,15 +21,20 @@ export function ChatControls({ threadId }: { threadId: string }) {
       }),
     [override, thread?.model, thread?.reasoningEffort],
   );
+  const provider = thread?.provider ?? (threadId.startsWith("claude:") ? "claude" : "codex");
+  const providerModels = models.filter((model) => (model.provider ?? "codex") === provider);
 
   return (
     <div className="chat-controls">
+      <span className={`provider-pill provider-${provider}`}>
+        {provider === "claude" ? "Claude" : "Codex"}
+      </span>
       <select
         aria-label="Model for this chat"
         title="Model for this chat"
         value={settings.model}
         onChange={(event) => {
-          const model = models.find((item) => item.id === event.target.value);
+          const model = providerModels.find((item) => item.id === event.target.value);
           setThreadSettings(threadId, {
             model: event.target.value,
             effort: model?.defaultReasoningEffort ?? settings.effort,
@@ -37,7 +42,7 @@ export function ChatControls({ threadId }: { threadId: string }) {
         }}
       >
         <option value="">Default model</option>
-        {models.map((model) => (
+        {providerModels.map((model) => (
           <option key={model.id} value={model.id}>
             {model.displayName}
           </option>
@@ -49,7 +54,7 @@ export function ChatControls({ threadId }: { threadId: string }) {
         value={settings.effort}
         onChange={(event) => setThreadSettings(threadId, { effort: event.target.value })}
       >
-        {efforts(models, settings.model).map((effort) => (
+        {efforts(providerModels, settings.model, provider).map((effort) => (
           <option key={effort} value={effort}>
             {effort}
           </option>
@@ -105,14 +110,13 @@ export function ChatControls({ threadId }: { threadId: string }) {
 function efforts(
   models: ReturnType<typeof useAppStore.getState>["models"],
   modelId: string,
+  provider: "codex" | "claude",
 ): string[] {
   const model = models.find((item) => item.id === modelId);
   return (
-    model?.supportedReasoningEfforts?.map((item) => item.reasoningEffort) ?? [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-    ]
+    model?.supportedReasoningEfforts?.map((item) => item.reasoningEffort) ??
+    (provider === "claude"
+      ? ["low", "medium", "high", "xhigh", "max"]
+      : ["low", "medium", "high", "xhigh"])
   );
 }

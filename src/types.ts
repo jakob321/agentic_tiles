@@ -1,5 +1,6 @@
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+export type AgentProvider = "codex" | "claude";
 
 export interface ThreadStatus {
   type: "notLoaded" | "idle" | "systemError" | "active" | string;
@@ -29,6 +30,7 @@ export interface Turn {
 
 export interface ThreadSummary {
   id: string;
+  provider?: AgentProvider;
   sessionId?: string;
   name?: string | null;
   preview: string;
@@ -134,6 +136,7 @@ export interface UiSettings {
   approvalPolicy: ApprovalPolicy;
   networkAccess: boolean;
   defaultCwd: string;
+  defaultClaudeCwd: string;
   sidebarWidth: number;
   zoom: number;
 }
@@ -165,6 +168,7 @@ export interface PersistedWorkspace {
 export interface ModelOption {
   id: string;
   displayName: string;
+  provider?: AgentProvider;
   defaultReasoningEffort?: string;
   supportedReasoningEfforts?: Array<{
     reasoningEffort: string;

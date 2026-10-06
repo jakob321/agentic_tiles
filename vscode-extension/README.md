@@ -2,23 +2,25 @@
 
 **Run multiple coding-agent conversations side by side in one persistent VS Code workspace.**
 
-Agentic Tiles turns the Codex CLI into a full editor-area workspace with resizable tiles and
-browser-style tabs inside every tile. Keep several tasks visible, drag conversations where they
-belong, and return to the same layout after restarting VS Code.
+Agentic Tiles turns the Codex and Claude CLIs into a full editor-area workspace with resizable
+tiles and browser-style tabs inside every tile. Choose the CLI for each new conversation, keep
+several tasks visible, and return to the same layout after restarting VS Code.
 
 Agentic Tiles is free and open source. It has no separate account, hosted backend, paid licence,
 or subscription.
 
-> This is an independent project and is not affiliated with or endorsed by OpenAI. The Codex CLI
-> must be installed separately, and its service usage remains subject to the user's OpenAI plan.
+> This is an independent project and is not affiliated with or endorsed by OpenAI or Anthropic.
+> The CLIs must be installed separately, and their service usage remains subject to the user's
+> respective provider plan.
 
 ## Features
 
 - Split any tile horizontally or vertically and resize the result.
 - Keep independent browser-style tabs in every tile.
 - Drag chats from the searchable sidebar into any tile.
+- Choose Codex or Claude when creating each conversation.
 - Follow live messages, reasoning, commands, tools, approvals, and agent questions.
-- Queue multiple follow-up messages while Codex is working, then steer any one into the active turn.
+- Queue multiple follow-up messages while an agent is working, then steer any one into the active turn.
 - Review changed files and unified diffs directly in the conversation.
 - Open, reveal, or copy local file links from responses.
 - Configure model, reasoning, plan mode, permissions, approval policy, and network per chat.
@@ -30,10 +32,15 @@ or subscription.
 
 - Ubuntu/Linux and VS Code 1.90 or newer.
 - The `codex` CLI installed and authenticated.
+- The `claude` CLI installed and authenticated to create Claude chats.
 
-The extension starts the installed CLI with `codex app-server --stdio`; it does not bundle Codex.
-If automatic discovery cannot find an NVM/npm installation, set
-`agenticTiles.codexPath` to the absolute executable path.
+The extension starts the installed CLIs; it does not bundle either provider. If automatic
+discovery fails, set `agenticTiles.codexPath` or `agenticTiles.claudePath` to the corresponding
+executable. `claudePath` may also point to an SSH launcher, though remote Claude sessions operate
+on the remote machine's filesystem.
+
+Claude conversations created by Agentic Tiles are persisted and listed by the extension. Importing
+pre-existing Claude CLI conversations is not supported yet.
 
 ## Open Agentic Tiles
 
@@ -49,8 +56,8 @@ prompt.
 ## Privacy
 
 Agentic Tiles adds no telemetry and sends no conversation data to an Agentic Tiles service.
-Workspace layout is kept in VS Code's local extension storage. Codex communicates according to
-the user's existing Codex configuration.
+Workspace layout and Agentic Tiles' Claude transcript index are kept in VS Code's local extension
+storage. Each CLI communicates according to the user's existing provider configuration.
 
 ## Source, issues, and licence
 
@@ -69,5 +76,5 @@ npm run package
 Install the generated package with **Extensions: Install from VSIX...** or:
 
 ```bash
-code --install-extension dist/agentic-tiles-0.2.2.vsix
+code --install-extension dist/agentic-tiles-0.3.0.vsix
 ```

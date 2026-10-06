@@ -1,7 +1,8 @@
-import { codexRequest, codexRespond } from "./api";
+import { agentRequest, codexRequest, codexRespond } from "./api";
 import { defaultChatSettings, useAppStore } from "./store";
 import type {
   ApprovalRequest,
+  AgentProvider,
   ChatSettings,
   CodexEnvelope,
   ModelOption,
@@ -28,13 +29,24 @@ const visibleSources = [
 ];
 
 export async function fetchThreads(archived = false): Promise<ThreadSummary[]> {
+  const results = await Promise.all([
+    fetchProviderThreads("codex", archived),
+    fetchProviderThreads("claude", archived).catch(() => []),
+  ]);
+  return results.flat().sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+async function fetchProviderThreads(
+  provider: AgentProvider,
+  archived: boolean,
+): Promise<ThreadSummary[]> {
   const threads = new Map<string, ThreadSummary>();
   let cursor: string | null = null;
   do {
-    const response: { data: ThreadSummary[]; nextCursor: string | null } = await codexRequest<{
+    const response: { data: ThreadSummary[]; nextCursor: string | null } = await providerRequest<{
       data: ThreadSummary[];
       nextCursor: string | null;
-    }>("thread/list", {
+    }>(provider, "thread/list", {
       cursor,
       limit: 100,
       sortKey: "updated_at",
@@ -43,7 +55,7 @@ export async function fetchThreads(archived = false): Promise<ThreadSummary[]> {
       sourceKinds: visibleSources,
     });
     for (const thread of response.data) {
-      if (!threads.has(thread.id)) threads.set(thread.id, thread);
+      if (!threads.has(thread.id)) threads.set(thread.id, { ...thread, provider });
     }
     cursor = response.nextCursor;
   } while (cursor && threads.size < 1000);
@@ -57,8 +69,13 @@ export async function refreshThreads(): Promise<void> {
 }
 
 export async function fetchModels(): Promise<ModelOption[]> {
-  const response = await codexRequest<{ data: ModelOption[] }>("model/list", {});
-  return response.data;
+  const responses = await Promise.all([
+    providerRequest<{ data: ModelOption[] }>("codex", "model/list", {}),
+    agentRequest<{ data: ModelOption[] }>("claude", "model/list", {}).catch(() => ({ data: [] })),
+  ]);
+  return responses.flatMap((response, index) =>
+    response.data.map((model) => ({ ...model, provider: index === 0 ? "codex" : "claude" })),
+  );
 }
 
 export async function fetchUsage(): Promise<{
@@ -74,28 +91,31 @@ export async function fetchUsage(): Promise<{
 
 export async function loadChat(threadId: string, force = false): Promise<void> {
   const state = useAppStore.getState();
+  const provider = providerForThread(threadId);
   const current = state.chats[threadId];
   if (!force && (current?.loading || current?.loaded)) return;
   state.setChatLoading(threadId, true);
   try {
     const method = force ? "thread/read" : "thread/resume";
-    const response = await codexRequest<{ thread: ThreadDetail }>(method, {
+    const response = await requestForThread<{ thread: ThreadDetail }>(threadId, method, {
       threadId,
       ...(force ? { includeTurns: true } : {}),
     });
-    state.setChat(threadId, response.thread, force ? undefined : true);
-    state.setRunning(threadId, threadIsRunning(response.thread));
-    state.upsertThread(response.thread);
+    const thread = { ...response.thread, provider };
+    state.setChat(threadId, thread, force ? undefined : true);
+    state.setRunning(threadId, threadIsRunning(thread));
+    state.upsertThread(thread);
   } catch (error) {
     if (!force) {
       try {
-        const response = await codexRequest<{ thread: ThreadDetail }>("thread/read", {
+        const response = await requestForThread<{ thread: ThreadDetail }>(threadId, "thread/read", {
           threadId,
           includeTurns: true,
         });
-        state.setChat(threadId, response.thread, false);
-        state.setRunning(threadId, threadIsRunning(response.thread));
-        state.upsertThread(response.thread);
+        const thread = { ...response.thread, provider };
+        state.setChat(threadId, thread, false);
+        state.setRunning(threadId, threadIsRunning(thread));
+        state.upsertThread(thread);
         state.setChatError(threadId, attachError(error));
         return;
       } catch (readError) {
@@ -121,7 +141,7 @@ export async function fetchQueue(threadId: string): Promise<QueuedSubmission[]> 
     const response: {
       data: QueuedSubmission[];
       nextCursor: string | null;
-    } = await codexRequest("thread/queue/list", { threadId, cursor, limit: 100 });
+    } = await requestForThread(threadId, "thread/queue/list", { threadId, cursor, limit: 100 });
     submissions.push(...response.data);
     cursor = response.nextCursor;
   } while (cursor);
@@ -131,7 +151,8 @@ export async function fetchQueue(threadId: string): Promise<QueuedSubmission[]> 
 
 export async function enqueueMessage(threadId: string, text: string): Promise<void> {
   const input = [{ type: "text", text }];
-  const response = await codexRequest<{ queuedSubmission: QueuedSubmission }>(
+  const response = await requestForThread<{ queuedSubmission: QueuedSubmission }>(
+    threadId,
     "thread/queue/add",
     {
       threadId,
@@ -159,18 +180,18 @@ export async function steerQueuedMessage(
 
   try {
     if (activeTurn) {
-      await codexRequest("turn/steer", {
+      await requestForThread(threadId, "turn/steer", {
         threadId,
         input: submission.input,
         clientUserMessageId: submission.clientUserMessageId,
         expectedTurnId: activeTurn.id,
       });
-      await codexRequest("thread/queue/delete", {
+      await requestForThread(threadId, "thread/queue/delete", {
         threadId,
         queuedSubmissionId: submission.id,
       });
     } else {
-      await codexRequest("thread/queue/start", {
+      await requestForThread(threadId, "thread/queue/start", {
         threadId,
         queuedSubmissionId: submission.id,
       });
@@ -198,10 +219,14 @@ function newClientMessageId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-export async function createThread(cwd: string, initialPrompt: string): Promise<string> {
+export async function createThread(
+  cwd: string,
+  initialPrompt: string,
+  provider: AgentProvider = "codex",
+): Promise<string> {
   const state = useAppStore.getState();
   const settings = defaultChatSettings;
-  const response = await codexRequest<{ thread: ThreadDetail }>("thread/start", {
+  const response = await providerRequest<{ thread: ThreadDetail }>(provider, "thread/start", {
     cwd,
     ...(settings.model ? { model: settings.model } : {}),
     approvalPolicy: settings.approvalPolicy,
@@ -210,7 +235,7 @@ export async function createThread(cwd: string, initialPrompt: string): Promise<
   });
   state.setChat(
     response.thread.id,
-    { ...response.thread, turns: response.thread.turns ?? [] },
+    { ...response.thread, provider, turns: response.thread.turns ?? [] },
     true,
   );
   state.setThreadSettings(response.thread.id, {
@@ -220,7 +245,7 @@ export async function createThread(cwd: string, initialPrompt: string): Promise<
     approvalPolicy: settings.approvalPolicy,
     networkAccess: settings.networkAccess,
   });
-  state.upsertThread(response.thread);
+  state.upsertThread({ ...response.thread, provider });
   if (initialPrompt.trim()) {
     await startTurn(response.thread.id, initialPrompt.trim());
   }
@@ -239,6 +264,7 @@ export const SLASH_COMMANDS = [
 export async function runSlashCommand(threadId: string, input: string): Promise<void> {
   const [rawCommand, ...args] = input.trim().split(/\s+/);
   const command = rawCommand.toLocaleLowerCase();
+  const provider = providerForThread(threadId);
   const store = useAppStore.getState();
   const addResult = (output: string, tone: "normal" | "error" = "normal") =>
     store.addCommandMessage(threadId, {
@@ -259,7 +285,7 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
     const prompt = input.trim().slice(rawCommand.length).trim();
     const nextMode = prompt || settings.collaborationMode !== "plan" ? "plan" : "default";
     if (!state.chats[threadId]?.resumed) await resumeForWrite(threadId);
-    await codexRequest("thread/settings/update", {
+    await requestForThread(threadId, "thread/settings/update", {
       threadId,
       collaborationMode: collaborationMode(threadId, nextMode),
     });
@@ -270,6 +296,10 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
   }
 
   if (command === "/usage") {
+    if (provider === "claude") {
+      addResult("Claude usage details are not exposed through this CLI integration yet.");
+      return;
+    }
     const mode = (args[0] ?? "overview").toLocaleLowerCase();
     if (!["overview", "daily", "weekly", "cumulative"].includes(mode)) {
       addResult("Usage: /usage [daily|weekly|cumulative]", "error");
@@ -288,6 +318,7 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
     const settings = chatSettings(threadId);
     addResult([
       `Chat: ${threadId}`,
+      `Provider: ${provider === "claude" ? "Claude" : "Codex"}`,
       `Directory: ${thread?.cwd ?? "Unknown"}`,
       `Model: ${settings.model || thread?.model || "Default"}`,
       `Reasoning: ${settings.effort}`,
@@ -304,11 +335,16 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
     const state = useAppStore.getState();
     const settings = chatSettings(threadId);
     if (!args[0]) {
-      const available = state.models.map((model) => model.id).join(", ");
+      const available = state.models
+        .filter((model) => (model.provider ?? "codex") === provider)
+        .map((model) => model.id)
+        .join(", ");
       addResult(`Current model: ${settings.model || "Default"}\nAvailable: ${available || "Unavailable"}`);
       return;
     }
-    const model = state.models.find((item) => item.id === args[0]);
+    const model = state.models.find(
+      (item) => item.id === args[0] && (item.provider ?? "codex") === provider,
+    );
     if (!model) {
       addResult(`Unknown model: ${args[0]}\nRun /model to see available models.`, "error");
       return;
@@ -324,7 +360,9 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
   if (command === "/reasoning") {
     const state = useAppStore.getState();
     const settings = chatSettings(threadId);
-    const model = state.models.find((item) => item.id === settings.model);
+    const model = state.models.find(
+      (item) => item.id === settings.model && (item.provider ?? "codex") === provider,
+    );
     const available = model?.supportedReasoningEfforts?.map((item) => item.reasoningEffort) ?? [
       "low",
       "medium",
@@ -439,11 +477,11 @@ export async function startTurn(threadId: string, text: string): Promise<void> {
         : {}),
     };
     try {
-      await codexRequest("turn/start", params);
+      await requestForThread(threadId, "turn/start", params);
     } catch (error) {
       if (!errorText(error).toLocaleLowerCase().includes("thread not found")) throw error;
       thread = await resumeForWrite(threadId);
-      await codexRequest("turn/start", { ...params, cwd: thread.cwd });
+      await requestForThread(threadId, "turn/start", { ...params, cwd: thread.cwd });
     }
   } catch (error) {
     const message = attachError(error);
@@ -469,11 +507,12 @@ function chatSettings(threadId: string): ChatSettings {
 
 async function resumeForWrite(threadId: string): Promise<ThreadDetail> {
   try {
-    const response = await codexRequest<{ thread: ThreadDetail }>("thread/resume", { threadId });
+    const response = await requestForThread<{ thread: ThreadDetail }>(threadId, "thread/resume", { threadId });
     const state = useAppStore.getState();
-    state.setChat(threadId, response.thread, true);
-    state.upsertThread(response.thread);
-    return response.thread;
+    const thread = { ...response.thread, provider: providerForThread(threadId) };
+    state.setChat(threadId, thread, true);
+    state.upsertThread(thread);
+    return thread;
   } catch (error) {
     throw new Error(attachError(error));
   }
@@ -494,7 +533,7 @@ export async function interruptThread(threadId: string): Promise<void> {
   if (!activeTurn) {
     throw new Error("No active turn ID is available yet");
   }
-  await codexRequest("turn/interrupt", { threadId, turnId: activeTurn.id });
+  await requestForThread(threadId, "turn/interrupt", { threadId, turnId: activeTurn.id });
 }
 
 export async function answerApproval(
@@ -529,6 +568,10 @@ export async function answerUserInput(
 }
 
 export function handleCodexEvent(message: CodexEnvelope): void {
+  handleAgentEvent("codex", message);
+}
+
+export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope): void {
   const store = useAppStore.getState();
   const method = message.method ?? "";
   const params = message.params ?? {};
@@ -564,7 +607,7 @@ export function handleCodexEvent(message: CodexEnvelope): void {
   }
 
   const thread = params.thread as ThreadSummary | undefined;
-  if (thread?.id) store.upsertThread(thread);
+  if (thread?.id) store.upsertThread({ ...thread, provider });
 
   if (!threadId) return;
 
@@ -602,7 +645,10 @@ export function handleCodexEvent(message: CodexEnvelope): void {
 
   if (method === "error") {
     const error = params.error as { message?: string } | undefined;
-    store.setChatError(threadId, error?.message ?? "Codex reported an error");
+    store.setChatError(
+      threadId,
+      error?.message ?? `${provider === "claude" ? "Claude" : "Codex"} reported an error`,
+    );
     return;
   }
 
@@ -625,6 +671,30 @@ export function handleCodexEvent(message: CodexEnvelope): void {
           : "agentMessage";
     store.appendLiveDelta(threadId, itemId, itemType, delta);
   }
+}
+
+export function providerForThread(threadId: string): AgentProvider {
+  const state = useAppStore.getState();
+  const thread = state.chats[threadId]?.thread ?? state.threads.find((item) => item.id === threadId);
+  return thread?.provider ?? (threadId.startsWith("claude:") ? "claude" : "codex");
+}
+
+function requestForThread<T = unknown>(
+  threadId: string,
+  method: string,
+  params: Record<string, unknown>,
+): Promise<T> {
+  return providerRequest<T>(providerForThread(threadId), method, params);
+}
+
+function providerRequest<T = unknown>(
+  provider: AgentProvider,
+  method: string,
+  params: Record<string, unknown>,
+): Promise<T> {
+  return provider === "codex"
+    ? codexRequest<T>(method, params)
+    : agentRequest<T>(provider, method, params);
 }
 
 function errorText(error: unknown): string {

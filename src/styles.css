@@ -524,6 +524,16 @@ select:focus {
   white-space: nowrap;
 }
 
+.chat-provider {
+  margin-right: 5px;
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.chat-provider.provider-claude {
+  color: #d9a6ff;
+}
+
 .approval-count {
   min-width: 18px;
   padding: 2px 5px;
@@ -799,6 +809,21 @@ select:focus {
   background-position: right 4px center;
   color: #b9c0c8;
   font-size: 9px;
+}
+
+.provider-pill {
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.provider-pill.provider-claude {
+  background: rgba(190, 125, 235, 0.13);
+  color: #d9a6ff;
 }
 
 .chat-controls select:hover {
@@ -1706,10 +1731,22 @@ select:focus {
 }
 
 .dialog-field input,
-.dialog-field textarea {
+.dialog-field textarea,
+.dialog-field select {
   width: 100%;
   padding: 9px;
   font-weight: 400;
+}
+
+.dialog-field select {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-active);
+  color: var(--text);
+}
+
+.dialog-field .dialog-hint {
+  line-height: 1.45;
 }
 
 .dialog-field textarea {

@@ -38,6 +38,7 @@ export const defaultSettings: UiSettings = {
   approvalPolicy: "never",
   networkAccess: true,
   defaultCwd: "",
+  defaultClaudeCwd: "/home/user",
   sidebarWidth: 300,
   zoom: 1,
 };

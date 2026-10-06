@@ -52,6 +52,8 @@ export function ChatView({ threadId }: { threadId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const initialScrollThreadRef = useRef<string | null>(null);
+  const provider = chat?.thread?.provider ?? (threadId.startsWith("claude:") ? "claude" : "codex");
+  const agentName = provider === "claude" ? "Claude" : "Codex";
 
   useEffect(() => {
     void loadChat(threadId);
@@ -123,7 +125,7 @@ export function ChatView({ threadId }: { threadId: string }) {
         {items.length === 0 && commandMessages.length === 0 && userInputRequests.length === 0 && !chat?.error && !chat?.running && (
           <div className="conversation-empty">
             <strong>Ready</strong>
-            <span>Send a message to continue this Codex chat.</span>
+            <span>Send a message to continue this {agentName} chat.</span>
           </div>
         )}
         {items.map((item) => (
@@ -140,7 +142,7 @@ export function ChatView({ threadId }: { threadId: string }) {
         ))}
         {chat?.error && <div className="chat-error">{chat.error}</div>}
         {showThinking && (
-          <div className="thinking-indicator" role="status" aria-label="Codex is thinking">
+          <div className="thinking-indicator" role="status" aria-label={`${agentName} is thinking`}>
             <span>Thinking</span>
             <span className="thinking-dots" aria-hidden="true">
               <i />
@@ -210,7 +212,7 @@ export function ChatView({ threadId }: { threadId: string }) {
           placeholder={
             chat?.running
               ? "Queue a follow-up or type / for commands"
-              : "Message Codex or type / for commands"
+              : `Message ${agentName} or type / for commands`
           }
           disabled={sending}
           rows={2}

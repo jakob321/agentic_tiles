@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   getCodexInfo,
   isVsCodeHost,
-  listenForCodexEvents,
+  listenForAgentEvents,
   listenForConnection,
   loadWorkspace,
   saveWorkspace,
   setWindowZoom,
 } from "./api";
-import { fetchModels, fetchUsage, handleCodexEvent, refreshThreads } from "./codex";
+import { fetchModels, fetchUsage, handleAgentEvent, refreshThreads } from "./codex";
 import { NewChatDialog } from "./components/NewChatDialog";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
@@ -51,7 +51,7 @@ export default function App() {
 
     const boot = async () => {
       try {
-        stopEvents = await listenForCodexEvents(handleCodexEvent);
+        stopEvents = await listenForAgentEvents(handleAgentEvent);
         stopConnection = await listenForConnection((connected) =>
           useAppStore.getState().setConnected(connected),
         );

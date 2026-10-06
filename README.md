@@ -6,17 +6,18 @@
 
 **Run several coding-agent conversations at once without losing the thread.**
 
-Agentic Tiles is a free and open-source tiled workspace for the Codex CLI. It turns separate
-agent conversations into a persistent visual workspace: keep four tasks visible, split the screen
-when another job appears, drag chats between panes, and return later to the same layout.
+Agentic Tiles is a free and open-source tiled workspace for coding-agent CLIs. The VS Code
+extension supports both Codex and Claude, while the desktop package currently supports Codex.
+Keep four tasks visible, split the screen when another job appears, drag chats between panes, and
+return later to the same layout.
 
-It is available as a full-editor VS Code extension and as a native Ubuntu desktop app. Both use
-the Codex CLI already installed on your machine, including its login, configuration, conversation
-history, models, permissions, and working directories. Agentic Tiles has no account, hosted
-backend, paid licence, or subscription of its own.
+It is available as a full-editor VS Code extension and as a native Ubuntu desktop app. It uses the
+CLIs already installed on your machine, including their login, configuration, permissions, and
+working directories. Agentic Tiles has no account, hosted backend, paid licence, or subscription
+of its own.
 
-> Agentic Tiles is an independent project. It is not affiliated with or endorsed by OpenAI.
-> Use of the Codex CLI and OpenAI services remains subject to their own terms and plan limits.
+> Agentic Tiles is an independent project. It is not affiliated with or endorsed by OpenAI or
+> Anthropic. Provider services remain subject to their own terms and plan limits.
 
 ## Why Agentic Tiles?
 
@@ -31,7 +32,7 @@ every pane.
 - **True tiled workspaces** — split any tile horizontally or vertically and resize it freely.
 - **Tabs in every tile** — organize related conversations without sacrificing screen space.
 - **Drag-and-drop layout** — drag a chat from the sidebar into an empty or occupied tile.
-- **Live Codex activity** — follow messages, reasoning summaries, commands, tools, approvals, and
+- **Live agent activity** — follow messages, reasoning summaries, commands, tools, approvals, and
   clarification requests as they happen.
 - **Queue and steer follow-ups** — line up multiple prompts while an agent works, or send any
   queued message into the active turn immediately.
@@ -42,14 +43,14 @@ every pane.
 - **Persistent setup** — tile splits, sizes, tabs, active chats, sidebar width, and settings survive
   restarts.
 - **Native VS Code theming** — the extension follows the active editor color theme.
-- **Codex slash commands** — use `/plan`, `/usage`, `/status`, `/model`, `/reasoning`, and `/help`.
+- **Chat slash commands** — use `/plan`, `/usage`, `/status`, `/model`, `/reasoning`, and `/help`.
 
 ## Editions
 
 | Edition | Best for | Status |
 | --- | --- | --- |
-| VS Code extension | Keeping multiple agents beside your code | Ubuntu/Linux supported |
-| Desktop app | A dedicated multi-agent workspace | Ubuntu `.deb` package |
+| VS Code extension | Codex and Claude beside your code | Ubuntu/Linux supported |
+| Desktop app | A dedicated Codex workspace | Ubuntu `.deb` package |
 
 ## Requirements
 
@@ -57,8 +58,9 @@ every pane.
 - VS Code 1.90 or newer for the extension.
 - The `codex` CLI installed and authenticated.
 - `codex` available on `PATH`, in a common NVM/npm location, or configured explicitly.
+- For Claude chats in VS Code, an authenticated `claude` CLI or compatible remote launcher.
 
-Agentic Tiles launches `codex app-server --stdio`; it does not bundle or replace the Codex CLI.
+Agentic Tiles launches the installed CLIs and does not bundle or replace them.
 
 ## Install the VS Code extension locally
 
@@ -66,7 +68,7 @@ Agentic Tiles launches `codex app-server --stdio`; it does not bundle or replace
 cd vscode-extension
 npm ci
 npm run package
-code --install-extension dist/agentic-tiles-0.2.2.vsix
+code --install-extension dist/agentic-tiles-0.3.0.vsix
 ```
 
 Then click the **Agentic Tiles** layout icon in the editor title bar, or run
@@ -85,8 +87,8 @@ build dependencies out of the host system.
 ## Security and privacy
 
 Agentic Tiles does not add telemetry, create an Agentic Tiles account, or send conversations to an
-Agentic Tiles server. Workspace layout is stored locally. Codex itself communicates according to
-the user's existing Codex configuration.
+Agentic Tiles server. Workspace layout is stored locally. Each CLI communicates according to the
+user's existing provider configuration.
 
 **New chats currently default to full filesystem access, network enabled, and “never ask” approval
 mode.** These defaults are convenient for an autonomous local workflow but grant the agent broad
@@ -113,8 +115,8 @@ npm run tauri dev
 ```
 
 The React interface in `src/` is shared by the Tauri desktop host and the VS Code webview. Each
-host provides the same small bridge for Codex app-server requests, persistence, and native UI
-operations.
+host provides a small bridge for agent requests, persistence, and native UI operations. Claude
+support currently lives in the VS Code host; the Tauri desktop host continues to use Codex only.
 
 ## Contributing
 
