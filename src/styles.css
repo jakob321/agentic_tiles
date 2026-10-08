@@ -808,6 +808,7 @@ select:focus {
 
 .chat-controls {
   display: flex;
+  flex-wrap: wrap;
   min-height: 29px;
   align-items: center;
   gap: 5px;
@@ -815,6 +816,21 @@ select:focus {
   border-bottom: 1px solid rgba(42, 48, 57, 0.7);
   color: var(--text-faint);
   font-size: 9px;
+}
+
+.chat-sound-button {
+  height: 23px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.chat-sound-button[aria-pressed="false"] {
+  color: var(--accent);
 }
 
 .chat-controls select {
