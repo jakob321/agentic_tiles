@@ -142,12 +142,15 @@ export interface UiSettings {
 }
 
 export type CollaborationMode = "default" | "plan";
+export type NotificationSound = "chime" | "bell" | "pop" | "double-beep" | "rising";
 
 export type ChatSettings = Pick<
   UiSettings,
   "model" | "effort" | "sandbox" | "approvalPolicy" | "networkAccess"
 > & {
   collaborationMode: CollaborationMode;
+  notificationsMuted: boolean;
+  notificationSound: NotificationSound;
 };
 
 export interface CommandMessage {

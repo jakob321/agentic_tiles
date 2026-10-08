@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { defaultChatSettings, useAppStore } from "../store";
+import { notificationSounds, prepareNotificationAudio, previewNotificationSound } from "../notificationSounds";
+import type { NotificationSound } from "../types";
 
 export function ChatControls({ threadId }: { threadId: string }) {
   const models = useAppStore((state) => state.models);
@@ -98,6 +100,38 @@ export function ChatControls({ threadId }: { threadId: string }) {
         />
         <span>Network {settings.networkAccess ? "on" : "off"}</span>
       </label>
+      <button
+        className="chat-sound-button"
+        aria-label="Mute notifications for this chat"
+        aria-pressed={settings.notificationsMuted}
+        title={settings.notificationsMuted ? "Unmute notifications for this chat" : "Mute notifications for this chat"}
+        onClick={() => {
+          if (settings.notificationsMuted) void prepareNotificationAudio();
+          setThreadSettings(threadId, { notificationsMuted: !settings.notificationsMuted });
+        }}
+      >
+        {settings.notificationsMuted ? "Sound off" : "Sound on"}
+      </button>
+      <select
+        aria-label="Notification sound for this chat"
+        title="Notification sound for this chat"
+        value={settings.notificationSound}
+        onChange={(event) => setThreadSettings(threadId, {
+          notificationSound: event.target.value as NotificationSound,
+        })}
+      >
+        {notificationSounds.map((sound) => (
+          <option key={sound.id} value={sound.id}>{sound.label}</option>
+        ))}
+      </select>
+      <button
+        className="chat-sound-button"
+        aria-label="Preview notification sound"
+        title="Preview the selected sound (even while muted)"
+        onClick={() => void previewNotificationSound(settings.notificationSound)}
+      >
+        Preview
+      </button>
       <span className="context-spacer" />
       {settings.collaborationMode === "plan" && <span className="plan-pill">Plan</span>}
       {chat?.loaded && !chat.resumed && <span className="readonly-pill">Read only</span>}

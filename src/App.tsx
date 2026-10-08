@@ -24,6 +24,7 @@ import { isLayoutNode } from "./layout";
 import { persistedWorkspace, useAppStore } from "./store";
 import type { PersistedWorkspace } from "./types";
 import { nextZoom, zoomDirection } from "./zoom";
+import { prepareNotificationAudio } from "./notificationSounds";
 
 export default function App() {
   const settings = useAppStore((state) => state.settings);
@@ -35,6 +36,20 @@ export default function App() {
   const [codexVersion, setCodexVersion] = useState("");
   const [claudeVersion, setClaudeVersion] = useState("");
   const sidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    const prepareAudio = () => {
+      if (Object.values(useAppStore.getState().threadSettings).some((chat) => !chat.notificationsMuted)) {
+        void prepareNotificationAudio();
+      }
+    };
+    window.addEventListener("pointerdown", prepareAudio);
+    window.addEventListener("keydown", prepareAudio);
+    return () => {
+      window.removeEventListener("pointerdown", prepareAudio);
+      window.removeEventListener("keydown", prepareAudio);
+    };
+  }, []);
 
   useEffect(() => {
     void setWindowZoom(settings.zoom);

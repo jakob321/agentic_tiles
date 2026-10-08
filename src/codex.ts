@@ -1,5 +1,6 @@
 import { agentRequest, codexRequest, codexRespond } from "./api";
 import { defaultChatSettings, useAppStore } from "./store";
+import { playNotificationSound } from "./notificationSounds";
 import type {
   ApprovalRequest,
   AgentProvider,
@@ -591,6 +592,9 @@ export function handleCodexEvent(message: CodexEnvelope): void {
   handleAgentEvent("codex", message);
 }
 
+// Bounded deduplication also covers chats that are not mounted in an active tile.
+const completedNotificationTurns = new Set<string>();
+
 export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope): void {
   const store = useAppStore.getState();
   const method = message.method ?? "";
@@ -657,6 +661,18 @@ export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope
   }
 
   if (method === "turn/completed") {
+    const turn = params.turn as { id?: string; status?: string; error?: unknown } | undefined;
+    if (turn?.id && turn.status === "completed" && !turn.error) {
+      const key = JSON.stringify([provider, threadId, turn.id]);
+      if (!completedNotificationTurns.has(key)) {
+        completedNotificationTurns.add(key);
+        if (completedNotificationTurns.size > 512) {
+          completedNotificationTurns.delete(completedNotificationTurns.values().next().value!);
+        }
+        const settings = chatSettings(threadId);
+        if (!settings.notificationsMuted) playNotificationSound(settings.notificationSound);
+      }
+    }
     store.setRunning(threadId, false);
     window.setTimeout(() => {
       void loadChat(threadId, true);
