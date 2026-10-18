@@ -554,7 +554,7 @@ function claudeModel(id: string, displayName: string): Record<string, unknown> {
   };
 }
 
-function itemFromClaudeBlock(
+export function itemFromClaudeBlock(
   block: Record<string, unknown>,
   eventId: string,
   index: number,
@@ -568,6 +568,15 @@ function itemFromClaudeBlock(
   if (block.type === "tool_use" && typeof block.id === "string") {
     const name = String(block.name ?? "Tool");
     const input = record(block.input);
+    if (name === "ExitPlanMode") {
+      // Claude proposes its plan by calling ExitPlanMode; surface it like a Codex plan item.
+      return {
+        id: block.id,
+        type: "plan",
+        text: typeof input.plan === "string" && input.plan.trim() ? input.plan : "Plan ready for review.",
+        status: "inProgress",
+      };
+    }
     if (name === "Bash") {
       return {
         id: block.id,

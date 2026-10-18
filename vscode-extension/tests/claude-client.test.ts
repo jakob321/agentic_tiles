@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ClaudeClient, findClaude, permissionArgs } from "../src/claudeClient";
+import { ClaudeClient, findClaude, itemFromClaudeBlock, permissionArgs } from "../src/claudeClient";
 
 describe("Claude CLI discovery", () => {
   it("prefers an explicitly configured executable", () => {
@@ -101,3 +101,15 @@ async function waitFor(condition: () => boolean): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+
+describe("Claude plan proposals", () => {
+  it("turns an ExitPlanMode call into a plan item", () => {
+    expect(
+      itemFromClaudeBlock(
+        { type: "tool_use", id: "tool-1", name: "ExitPlanMode", input: { plan: "1. Do it" } },
+        "event",
+        0,
+      ),
+    ).toMatchObject({ id: "tool-1", type: "plan", text: "1. Do it" });
+  });
+});
