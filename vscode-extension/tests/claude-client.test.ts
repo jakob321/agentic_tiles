@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ClaudeClient, findClaude, itemFromClaudeBlock, permissionArgs } from "../src/claudeClient";
+import { ClaudeClient, findClaude, itemFromClaudeBlock, latestPlanFile, permissionArgs } from "../src/claudeClient";
 
 describe("Claude CLI discovery", () => {
   it("prefers an explicitly configured executable", () => {
@@ -111,5 +111,19 @@ describe("Claude plan proposals", () => {
         0,
       ),
     ).toMatchObject({ id: "tool-1", type: "plan", text: "1. Do it" });
+  });
+
+  it("recovers the plan Claude wrote to its plans directory", () => {
+    const write = itemFromClaudeBlock(
+      {
+        type: "tool_use",
+        id: "tool-0",
+        name: "Write",
+        input: { file_path: "/home/u/.claude/plans/p.md", content: "# Plan" },
+      },
+      "event",
+      0,
+    )!;
+    expect(latestPlanFile([write])).toBe("# Plan");
   });
 });

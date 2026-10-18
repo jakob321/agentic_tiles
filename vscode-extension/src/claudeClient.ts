@@ -290,6 +290,9 @@ export class ClaudeClient {
         const block = record(rawBlock);
         const item = itemFromClaudeBlock(block, String(event.uuid ?? randomUUID()), index);
         if (!item) return;
+        if (item.type === "plan" && !String(item.text).trim()) {
+          item.text = latestPlanFile(turn.items) ?? "Plan ready for review.";
+        }
         const existing = turn.items.findIndex((entry) => entry.id === item.id);
         if (existing >= 0) turn.items[existing] = item;
         else turn.items.push(item);
@@ -573,7 +576,7 @@ export function itemFromClaudeBlock(
       return {
         id: block.id,
         type: "plan",
-        text: typeof input.plan === "string" && input.plan.trim() ? input.plan : "Plan ready for review.",
+        text: typeof input.plan === "string" ? input.plan : "",
         status: "inProgress",
       };
     }
@@ -594,6 +597,22 @@ export function itemFromClaudeBlock(
       arguments: input,
       status: "inProgress",
     };
+  }
+  return null;
+}
+
+/** Recent Claude versions write the plan to ~/.claude/plans/*.md and call ExitPlanMode without it. */
+export function latestPlanFile(items: ClaudeItem[]): string | null {
+  for (const item of [...items].reverse()) {
+    const args = record(item.arguments);
+    if (
+      item.tool === "Write" &&
+      typeof args.file_path === "string" &&
+      args.file_path.includes("/.claude/plans/") &&
+      typeof args.content === "string"
+    ) {
+      return args.content;
+    }
   }
   return null;
 }
