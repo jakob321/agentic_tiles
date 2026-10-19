@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatView } from "../src/components/ChatView";
-import { useAppStore } from "../src/store";
+import { defaultChatSettings, useAppStore } from "../src/store";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -11,10 +11,19 @@ import { useAppStore } from "../src/store";
 const codex = vi.hoisted(() => ({
   answerApproval: vi.fn(),
   answerUserInput: vi.fn(),
+  approvePlan: vi.fn().mockResolvedValue(undefined),
   enqueueMessage: vi.fn().mockResolvedValue(undefined),
   fetchQueue: vi.fn().mockResolvedValue([]),
   interruptThread: vi.fn(),
   loadChat: vi.fn().mockResolvedValue(undefined),
+  proposedPlan: (turns?: Array<{ status: string; items: Array<{ type: string }> }>) => {
+    const latest = turns?.at(-1);
+    return latest?.status === "completed"
+      ? latest.items.find((item) => item.type === "plan") ?? null
+      : null;
+  },
+  revisePlan: vi.fn().mockResolvedValue(undefined),
+  setPlanMode: vi.fn().mockResolvedValue(undefined),
   queuedSubmissionText: (submission: { input: Array<{ text?: string }> }) =>
     submission.input.map((item) => item.text ?? "").join("\n"),
   runSlashCommand: vi.fn(),
@@ -308,5 +317,52 @@ describe("chat view", () => {
     );
 
     expect(textarea.style.height).toBe("176px");
+  });
+
+  it("offers to implement or revise a proposed plan", async () => {
+    const threadId = "thread-plan";
+    useAppStore.setState({
+      approvals: {},
+      commandMessages: {},
+      userInputRequests: {},
+      queues: {},
+      threadSettings: {
+        [threadId]: { ...defaultChatSettings, collaborationMode: "plan" },
+      },
+      chats: {
+        [threadId]: {
+          thread: {
+            id: threadId,
+            preview: "Planning",
+            cwd: "/tmp/project",
+            createdAt: 1,
+            updatedAt: 1,
+            status: { type: "idle" },
+            turns: [
+              {
+                id: "turn-a",
+                status: "completed",
+                items: [{ id: "plan-a", type: "plan", text: "1. Change things" }],
+              },
+            ],
+          },
+          liveItems: {},
+          loading: false,
+          loaded: true,
+          resumed: true,
+          running: false,
+        },
+      },
+    });
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    roots.push(root);
+    act(() => root.render(<ChatView threadId={threadId} />));
+
+    const card = container.querySelector(".plan-decision-card")!;
+    expect(card.textContent).toContain("Implement this plan?");
+    await act(async () => card.querySelector<HTMLButtonElement>(".primary-button")!.click());
+    expect(codex.approvePlan).toHaveBeenCalledWith(threadId);
   });
 });

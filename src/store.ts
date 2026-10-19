@@ -51,6 +51,8 @@ export const defaultChatSettings: ChatSettings = {
   approvalPolicy: defaultSettings.approvalPolicy,
   networkAccess: defaultSettings.networkAccess,
   collaborationMode: "default",
+  notificationsMuted: true,
+  notificationSound: "chime",
 };
 
 interface AppState {

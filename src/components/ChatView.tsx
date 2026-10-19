@@ -5,11 +5,14 @@ import { copyText, isVsCodeHost, openLocalPath, revealLocalPath } from "../api";
 import {
   answerApproval,
   answerUserInput,
+  approvePlan,
   enqueueMessage,
   fetchQueue,
   interruptThread,
   loadChat,
+  proposedPlan,
   queuedSubmissionText,
+  revisePlan,
   runSlashCommand,
   SLASH_COMMANDS,
   startTurn,
@@ -43,6 +46,9 @@ export function ChatView({ threadId }: { threadId: string }) {
   const userInputRequests = useAppStore(
     (state) => state.userInputRequests[threadId] ?? NO_USER_INPUT_REQUESTS,
   );
+  const planMode = useAppStore(
+    (state) => state.threadSettings[threadId]?.collaborationMode === "plan",
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialScrollThreadRef = useRef<string | null>(null);
   const provider = chat?.thread?.provider ?? (threadId.startsWith("claude:") ? "claude" : "codex");
@@ -60,6 +66,11 @@ export function ChatView({ threadId }: { threadId: string }) {
     return [...canonical.filter((item) => !liveIds.has(item.id)), ...live];
   }, [chat?.liveItems, chat?.thread?.turns]);
 
+  const pendingPlan =
+    planMode && !chat?.running && approvals.length === 0 && userInputRequests.length === 0
+      ? proposedPlan(chat?.thread?.turns)
+      : null;
+
   useLayoutEffect(() => {
     const element = scrollRef.current;
     if (!element || !chat?.loaded) return;
@@ -70,7 +81,7 @@ export function ChatView({ threadId }: { threadId: string }) {
     }
     const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 220;
     if (nearBottom) element.scrollTop = element.scrollHeight;
-  }, [threadId, items.length, commandMessages.length, userInputRequests.length, chat?.loaded, chat?.running]);
+  }, [threadId, items.length, commandMessages.length, userInputRequests.length, chat?.loaded, chat?.running, pendingPlan?.id]);
 
   const showThinking = Boolean(
     chat?.running && approvals.length === 0 && userInputRequests.length === 0,
@@ -103,6 +114,9 @@ export function ChatView({ threadId }: { threadId: string }) {
         {commandMessages.map((command) => (
           <CommandResult key={command.id} message={command} />
         ))}
+        {pendingPlan && (
+          <PlanDecisionCard key={pendingPlan.id} threadId={threadId} agentName={agentName} />
+        )}
         {chat?.error && <div className="chat-error">{chat.error}</div>}
         {showThinking && (
           <div className="thinking-indicator" role="status" aria-label={`${agentName} is thinking`}>
@@ -131,6 +145,9 @@ const ChatComposer = memo(function ChatComposer({ threadId }: { threadId: string
   );
   const queuedSubmissions = useAppStore(
     (state) => state.queues[threadId] ?? NO_QUEUED_SUBMISSIONS,
+  );
+  const planMode = useAppStore(
+    (state) => state.threadSettings[threadId]?.collaborationMode === "plan",
   );
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -232,7 +249,9 @@ const ChatComposer = memo(function ChatComposer({ threadId }: { threadId: string
         placeholder={
           running
             ? "Queue a follow-up or type / for commands"
-            : `Message ${agentName} or type / for commands`
+            : planMode
+              ? `Describe what ${agentName} should plan, or type / for commands`
+              : `Message ${agentName} or type / for commands`
         }
         disabled={sending}
         rows={2}
@@ -259,6 +278,84 @@ const ChatComposer = memo(function ChatComposer({ threadId }: { threadId: string
     </div>
   );
 });
+
+function PlanDecisionCard({ threadId, agentName }: { threadId: string; agentName: string }) {
+  const [choice, setChoice] = useState<"approve" | "revise">("approve");
+  const [feedback, setFeedback] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const feedbackRef = useRef<HTMLTextAreaElement>(null);
+  const canSubmit = choice === "approve" || Boolean(feedback.trim());
+
+  useEffect(() => {
+    if (choice === "revise") feedbackRef.current?.focus();
+  }, [choice]);
+
+  const submit = async () => {
+    if (!canSubmit || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (choice === "approve") await approvePlan(threadId);
+      else await revisePlan(threadId, feedback.trim());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="plan-decision-card" role="group" aria-label="Plan decision">
+      <strong>Implement this plan?</strong>
+      <label className={`plan-choice ${choice === "approve" ? "plan-choice-active" : ""}`}>
+        <input
+          type="radio"
+          name={`plan-choice-${threadId}`}
+          checked={choice === "approve"}
+          onChange={() => setChoice("approve")}
+        />
+        <span>
+          <b>Yes, implement it</b>
+          <small>Turns plan mode off and lets {agentName} start working.</small>
+        </span>
+      </label>
+      <label className={`plan-choice ${choice === "revise" ? "plan-choice-active" : ""}`}>
+        <input
+          type="radio"
+          name={`plan-choice-${threadId}`}
+          checked={choice === "revise"}
+          onChange={() => setChoice("revise")}
+        />
+        <span>
+          <b>No, revise the plan</b>
+          <small>Stays in plan mode. Tell {agentName} what to change.</small>
+        </span>
+      </label>
+      {choice === "revise" && (
+        <textarea
+          ref={feedbackRef}
+          value={feedback}
+          onChange={(event) => setFeedback(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+          placeholder="What should be different?"
+          rows={3}
+          disabled={busy}
+        />
+      )}
+      {error && <div className="plan-decision-error">{error}</div>}
+      <div className="approval-actions">
+        <button className="primary-button" onClick={() => void submit()} disabled={!canSubmit || busy}>
+          {busy ? "Sending…" : choice === "approve" ? "Implement plan" : "Send feedback"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function UserInputCard({ request }: { request: UserInputRequest }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});

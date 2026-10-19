@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2
+
+- Replaced the plan-mode badge with a switch in each chat's control bar.
+- Added an "Implement this plan?" card after a proposed plan: approve to leave plan mode and start implementing, or send feedback to revise the plan while staying in plan mode.
+- Claude `ExitPlanMode` proposals now render as plan items.
+- Added model, reasoning, and plan-mode pickers to the New Chat dialog, remembering the last choice per CLI.
+
 ## 0.3.1
 
 - Added live Codex and Claude usage counters with five-hour and weekly limits where available.

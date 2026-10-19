@@ -139,15 +139,20 @@ export interface UiSettings {
   defaultClaudeCwd: string;
   sidebarWidth: number;
   zoom: number;
+  /** Model and reasoning last picked in the New Chat dialog, per CLI. */
+  newChatDefaults?: Partial<Record<AgentProvider, { model: string; effort: string }>>;
 }
 
 export type CollaborationMode = "default" | "plan";
+export type NotificationSound = "chime" | "bell" | "pop" | "double-beep" | "rising";
 
 export type ChatSettings = Pick<
   UiSettings,
   "model" | "effort" | "sandbox" | "approvalPolicy" | "networkAccess"
 > & {
   collaborationMode: CollaborationMode;
+  notificationsMuted: boolean;
+  notificationSound: NotificationSound;
 };
 
 export interface CommandMessage {

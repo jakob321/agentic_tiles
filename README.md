@@ -41,6 +41,10 @@ every pane.
 - **Useful file links** — open, reveal, or copy local file paths from agent responses.
 - **Per-chat controls** — model, reasoning effort, collaboration mode, sandbox, approvals, and
   network access stay with the conversation they configure.
+- **Completion sounds** — unmute individual chats and choose Chime, Bell, Pop, Double beep, or
+  Rising when an agent finishes a response. Chats start muted; sound choices and mute settings
+  survive restarts. Use **Sound off / Sound on** and **Preview** in the chat controls. After
+  reopening the app, click or press a key to enable audio for previously unmuted chats.
 - **Persistent setup** — tile splits, sizes, tabs, active chats, sidebar width, and settings survive
   restarts.
 - **Native VS Code theming** — the extension follows the active editor color theme.

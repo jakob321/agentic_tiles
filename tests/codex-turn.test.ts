@@ -7,7 +7,7 @@ const api = vi.hoisted(() => ({
 
 vi.mock("../src/api", () => api);
 
-import { enqueueMessage, startTurn, steerQueuedMessage } from "../src/codex";
+import { enqueueMessage, proposedPlan, startTurn, steerQueuedMessage } from "../src/codex";
 import { useAppStore } from "../src/store";
 import type { ThreadDetail } from "../src/types";
 
@@ -141,5 +141,19 @@ describe("starting a turn", () => {
       queuedSubmissionId: submission.id,
     });
     expect(useAppStore.getState().queues[thread.id]).toEqual([]);
+  });
+});
+
+describe("proposed plans", () => {
+  it("only offers a plan when the latest turn completed with one", () => {
+    const plan = { id: "plan-a", type: "plan", text: "1. Do it" };
+    expect(proposedPlan([{ id: "t1", status: "completed", items: [plan] }])).toBe(plan);
+    expect(proposedPlan([{ id: "t1", status: "inProgress", items: [plan] }])).toBeNull();
+    expect(
+      proposedPlan([
+        { id: "t1", status: "completed", items: [plan] },
+        { id: "t2", status: "completed", items: [{ id: "m", type: "agentMessage" }] },
+      ]),
+    ).toBeNull();
   });
 });

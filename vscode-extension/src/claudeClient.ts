@@ -290,6 +290,9 @@ export class ClaudeClient {
         const block = record(rawBlock);
         const item = itemFromClaudeBlock(block, String(event.uuid ?? randomUUID()), index);
         if (!item) return;
+        if (item.type === "plan" && !String(item.text).trim()) {
+          item.text = latestPlanFile(turn.items) ?? "Plan ready for review.";
+        }
         const existing = turn.items.findIndex((entry) => entry.id === item.id);
         if (existing >= 0) turn.items[existing] = item;
         else turn.items.push(item);
@@ -554,7 +557,7 @@ function claudeModel(id: string, displayName: string): Record<string, unknown> {
   };
 }
 
-function itemFromClaudeBlock(
+export function itemFromClaudeBlock(
   block: Record<string, unknown>,
   eventId: string,
   index: number,
@@ -568,6 +571,15 @@ function itemFromClaudeBlock(
   if (block.type === "tool_use" && typeof block.id === "string") {
     const name = String(block.name ?? "Tool");
     const input = record(block.input);
+    if (name === "ExitPlanMode") {
+      // Claude proposes its plan by calling ExitPlanMode; surface it like a Codex plan item.
+      return {
+        id: block.id,
+        type: "plan",
+        text: typeof input.plan === "string" ? input.plan : "",
+        status: "inProgress",
+      };
+    }
     if (name === "Bash") {
       return {
         id: block.id,
@@ -585,6 +597,22 @@ function itemFromClaudeBlock(
       arguments: input,
       status: "inProgress",
     };
+  }
+  return null;
+}
+
+/** Recent Claude versions write the plan to ~/.claude/plans/*.md and call ExitPlanMode without it. */
+export function latestPlanFile(items: ClaudeItem[]): string | null {
+  for (const item of [...items].reverse()) {
+    const args = record(item.arguments);
+    if (
+      item.tool === "Write" &&
+      typeof args.file_path === "string" &&
+      args.file_path.includes("/.claude/plans/") &&
+      typeof args.content === "string"
+    ) {
+      return args.content;
+    }
   }
   return null;
 }

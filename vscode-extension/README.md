@@ -24,7 +24,9 @@ or subscription.
 - Queue multiple follow-up messages while an agent is working, then steer any one into the active turn.
 - Review changed files and unified diffs directly in the conversation.
 - Open, reveal, or copy local file links from responses.
-- Configure model, reasoning, plan mode, permissions, approval policy, and network per chat.
+- Pick model, reasoning, and plan mode when creating a chat, and change them per chat later.
+- Toggle plan mode with a switch, then approve a proposed plan to implement it or send feedback to revise it.
+- Configure permissions, approval policy, and network per chat.
 - Use `/plan`, `/usage`, `/status`, `/model`, `/reasoning`, and `/help` in the composer.
 - Preserve layout, tabs, active conversations, split sizes, and settings across restarts.
 - Match the active VS Code color theme automatically.

@@ -1,5 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { setPlanMode } from "../codex";
 import { defaultChatSettings, useAppStore } from "../store";
+import { notificationSounds, prepareNotificationAudio, previewNotificationSound } from "../notificationSounds";
+import type { AgentProvider, ModelOption, NotificationSound } from "../types";
+import { PlanToggle } from "./PlanToggle";
 
 export function ChatControls({ threadId }: { threadId: string }) {
   const models = useAppStore((state) => state.models);
@@ -23,12 +27,25 @@ export function ChatControls({ threadId }: { threadId: string }) {
   );
   const provider = thread?.provider ?? (threadId.startsWith("claude:") ? "claude" : "codex");
   const providerModels = models.filter((model) => (model.provider ?? "codex") === provider);
+  const [planBusy, setPlanBusy] = useState(false);
+  const togglePlan = (enabled: boolean) => {
+    setPlanBusy(true);
+    void setPlanMode(threadId, enabled)
+      .catch(() => undefined)
+      .finally(() => setPlanBusy(false));
+  };
 
   return (
     <div className="chat-controls">
       <span className={`provider-pill provider-${provider}`}>
         {provider === "claude" ? "Claude" : "Codex"}
       </span>
+      <PlanToggle
+        compact
+        checked={settings.collaborationMode === "plan"}
+        disabled={planBusy}
+        onChange={togglePlan}
+      />
       <select
         aria-label="Model for this chat"
         title="Model for this chat"
@@ -54,7 +71,7 @@ export function ChatControls({ threadId }: { threadId: string }) {
         value={settings.effort}
         onChange={(event) => setThreadSettings(threadId, { effort: event.target.value })}
       >
-        {efforts(providerModels, settings.model, provider).map((effort) => (
+        {reasoningEfforts(providerModels, settings.model, provider).map((effort) => (
           <option key={effort} value={effort}>
             {effort}
           </option>
@@ -98,8 +115,39 @@ export function ChatControls({ threadId }: { threadId: string }) {
         />
         <span>Network {settings.networkAccess ? "on" : "off"}</span>
       </label>
+      <button
+        className="chat-sound-button"
+        aria-label="Mute notifications for this chat"
+        aria-pressed={settings.notificationsMuted}
+        title={settings.notificationsMuted ? "Unmute notifications for this chat" : "Mute notifications for this chat"}
+        onClick={() => {
+          if (settings.notificationsMuted) void prepareNotificationAudio();
+          setThreadSettings(threadId, { notificationsMuted: !settings.notificationsMuted });
+        }}
+      >
+        {settings.notificationsMuted ? "Sound off" : "Sound on"}
+      </button>
+      <select
+        aria-label="Notification sound for this chat"
+        title="Notification sound for this chat"
+        value={settings.notificationSound}
+        onChange={(event) => setThreadSettings(threadId, {
+          notificationSound: event.target.value as NotificationSound,
+        })}
+      >
+        {notificationSounds.map((sound) => (
+          <option key={sound.id} value={sound.id}>{sound.label}</option>
+        ))}
+      </select>
+      <button
+        className="chat-sound-button"
+        aria-label="Preview notification sound"
+        title="Preview the selected sound (even while muted)"
+        onClick={() => void previewNotificationSound(settings.notificationSound)}
+      >
+        Preview
+      </button>
       <span className="context-spacer" />
-      {settings.collaborationMode === "plan" && <span className="plan-pill">Plan</span>}
       {chat?.loaded && !chat.resumed && <span className="readonly-pill">Read only</span>}
       {chat?.running && <span className="running-pill">Working</span>}
       {approvalCount > 0 && <span className="waiting-pill">Needs approval</span>}
@@ -107,10 +155,10 @@ export function ChatControls({ threadId }: { threadId: string }) {
   );
 }
 
-function efforts(
-  models: ReturnType<typeof useAppStore.getState>["models"],
+export function reasoningEfforts(
+  models: ModelOption[],
   modelId: string,
-  provider: "codex" | "claude",
+  provider: AgentProvider,
 ): string[] {
   const model = models.find((item) => item.id === modelId);
   return (

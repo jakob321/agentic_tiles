@@ -1,5 +1,6 @@
 import { agentRequest, codexRequest, codexRespond } from "./api";
 import { defaultChatSettings, useAppStore } from "./store";
+import { playNotificationSound } from "./notificationSounds";
 import type {
   ApprovalRequest,
   AgentProvider,
@@ -11,6 +12,7 @@ import type {
   ThreadDetail,
   ThreadItem,
   ThreadSummary,
+  Turn,
   UsageData,
   UserInputRequest,
 } from "./types";
@@ -235,13 +237,24 @@ function newClientMessageId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+export interface NewThreadOptions {
+  model?: string;
+  effort?: string;
+  planMode?: boolean;
+}
+
 export async function createThread(
   cwd: string,
   initialPrompt: string,
   provider: AgentProvider = "codex",
+  options: NewThreadOptions = {},
 ): Promise<string> {
   const state = useAppStore.getState();
-  const settings = defaultChatSettings;
+  const settings: ChatSettings = {
+    ...defaultChatSettings,
+    model: options.model ?? defaultChatSettings.model,
+    effort: options.effort || defaultChatSettings.effort,
+  };
   const response = await providerRequest<{ thread: ThreadDetail }>(provider, "thread/start", {
     cwd,
     ...(settings.model ? { model: settings.model } : {}),
@@ -262,10 +275,43 @@ export async function createThread(
     networkAccess: settings.networkAccess,
   });
   state.upsertThread({ ...response.thread, provider });
+  if (options.planMode) await setPlanMode(response.thread.id, true);
   if (initialPrompt.trim()) {
     await startTurn(response.thread.id, initialPrompt.trim());
   }
   return response.thread.id;
+}
+
+export async function setPlanMode(threadId: string, enabled: boolean): Promise<void> {
+  const nextMode = enabled ? "plan" : "default";
+  if (!useAppStore.getState().chats[threadId]?.resumed) await resumeForWrite(threadId);
+  // Update locally first so the toggle responds immediately; the adapter call only syncs Codex.
+  useAppStore.getState().setThreadSettings(threadId, { collaborationMode: nextMode });
+  await requestForThread(threadId, "thread/settings/update", {
+    threadId,
+    collaborationMode: collaborationMode(threadId, nextMode),
+  });
+}
+
+export const PLAN_APPROVED_PROMPT = "The plan is approved. Implement it now.";
+
+/** Leaves plan mode and asks the agent to carry out the plan it just proposed. */
+export async function approvePlan(threadId: string): Promise<void> {
+  await setPlanMode(threadId, false);
+  await startTurn(threadId, PLAN_APPROVED_PROMPT);
+}
+
+/** Stays in plan mode and sends feedback so the agent revises its plan. */
+export async function revisePlan(threadId: string, feedback: string): Promise<void> {
+  if (chatSettings(threadId).collaborationMode !== "plan") await setPlanMode(threadId, true);
+  await startTurn(threadId, feedback);
+}
+
+/** Returns the plan from the latest turn when that turn finished by proposing one. */
+export function proposedPlan(turns: Turn[] | undefined): ThreadItem | null {
+  const latest = turns?.at(-1);
+  if (!latest || latest.status !== "completed") return null;
+  return [...latest.items].reverse().find((item) => item.type === "plan") ?? null;
 }
 
 export const SLASH_COMMANDS = [
@@ -296,17 +342,11 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
   }
 
   if (command === "/plan") {
-    const state = useAppStore.getState();
     const settings = chatSettings(threadId);
     const prompt = input.trim().slice(rawCommand.length).trim();
-    const nextMode = prompt || settings.collaborationMode !== "plan" ? "plan" : "default";
-    if (!state.chats[threadId]?.resumed) await resumeForWrite(threadId);
-    await requestForThread(threadId, "thread/settings/update", {
-      threadId,
-      collaborationMode: collaborationMode(threadId, nextMode),
-    });
-    useAppStore.getState().setThreadSettings(threadId, { collaborationMode: nextMode });
-    addResult(nextMode === "plan" ? "Plan mode enabled." : "Plan mode disabled.");
+    const enable = Boolean(prompt) || settings.collaborationMode !== "plan";
+    await setPlanMode(threadId, enable);
+    addResult(enable ? "Plan mode enabled." : "Plan mode disabled.");
     if (prompt) await startTurn(threadId, prompt);
     return;
   }
@@ -591,6 +631,9 @@ export function handleCodexEvent(message: CodexEnvelope): void {
   handleAgentEvent("codex", message);
 }
 
+// Bounded deduplication also covers chats that are not mounted in an active tile.
+const completedNotificationTurns = new Set<string>();
+
 export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope): void {
   const store = useAppStore.getState();
   const method = message.method ?? "";
@@ -657,6 +700,18 @@ export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope
   }
 
   if (method === "turn/completed") {
+    const turn = params.turn as { id?: string; status?: string; error?: unknown } | undefined;
+    if (turn?.id && turn.status === "completed" && !turn.error) {
+      const key = JSON.stringify([provider, threadId, turn.id]);
+      if (!completedNotificationTurns.has(key)) {
+        completedNotificationTurns.add(key);
+        if (completedNotificationTurns.size > 512) {
+          completedNotificationTurns.delete(completedNotificationTurns.values().next().value!);
+        }
+        const settings = chatSettings(threadId);
+        if (!settings.notificationsMuted) playNotificationSound(settings.notificationSound);
+      }
+    }
     store.setRunning(threadId, false);
     window.setTimeout(() => {
       void loadChat(threadId, true);

@@ -808,6 +808,7 @@ select:focus {
 
 .chat-controls {
   display: flex;
+  flex-wrap: wrap;
   min-height: 29px;
   align-items: center;
   gap: 5px;
@@ -815,6 +816,21 @@ select:focus {
   border-bottom: 1px solid rgba(42, 48, 57, 0.7);
   color: var(--text-faint);
   font-size: 9px;
+}
+
+.chat-sound-button {
+  height: 23px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.chat-sound-button[aria-pressed="false"] {
+  color: var(--accent);
 }
 
 .chat-controls select {
@@ -890,8 +906,7 @@ select:focus {
 
 .running-pill,
 .waiting-pill,
-.readonly-pill,
-.plan-pill {
+.readonly-pill {
   padding: 2px 6px;
   border-radius: 8px;
   background: var(--accent-soft);
@@ -911,9 +926,157 @@ select:focus {
   color: var(--text-muted);
 }
 
-.plan-pill {
+.plan-toggle {
+  display: inline-flex;
+  height: 23px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px 0 4px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.plan-toggle:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+}
+
+.plan-toggle:focus-visible {
+  outline: 1px solid var(--border-strong);
+}
+
+.plan-toggle:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.plan-toggle-track {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  flex: none;
+  border-radius: 7px;
+  background: var(--border-strong);
+  transition: background 140ms ease;
+}
+
+.plan-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform 140ms ease;
+}
+
+.plan-toggle-on {
+  border-color: rgba(117, 179, 230, 0.35);
   background: rgba(117, 179, 230, 0.12);
   color: #85c8ff;
+}
+
+.plan-toggle-on .plan-toggle-track {
+  background: #4f9fe0;
+}
+
+.plan-toggle-on .plan-toggle-thumb {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+.plan-toggle-compact {
+  font-size: 9px;
+}
+
+.plan-toggle-compact .plan-toggle-track {
+  width: 22px;
+  height: 12px;
+}
+
+.plan-toggle-compact .plan-toggle-thumb {
+  width: 8px;
+  height: 8px;
+}
+
+.plan-toggle-compact.plan-toggle-on .plan-toggle-thumb {
+  transform: translateX(10px);
+}
+
+.plan-decision-card {
+  max-width: 920px;
+  margin: 0 auto 10px;
+  padding: 11px 12px;
+  border: 1px solid rgba(117, 179, 230, 0.45);
+  border-radius: 7px;
+  background: rgba(117, 179, 230, 0.055);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.plan-decision-card > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.plan-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 5px 0;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.plan-choice:hover {
+  background: var(--panel-hover);
+}
+
+.plan-choice-active {
+  border-color: rgba(117, 179, 230, 0.6);
+  background: rgba(117, 179, 230, 0.08);
+}
+
+.plan-choice input {
+  margin-top: 2px;
+  accent-color: #4f9fe0;
+}
+
+.plan-choice span {
+  display: grid;
+  gap: 2px;
+}
+
+.plan-choice b {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.plan-choice small {
+  color: var(--text-faint);
+}
+
+.plan-decision-card textarea {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px;
+  resize: vertical;
+}
+
+.plan-decision-error {
+  margin-top: 6px;
+  color: var(--danger);
 }
 
 .conversation {
@@ -1772,6 +1935,25 @@ select:focus {
   border-radius: 6px;
   background: var(--panel-active);
   color: var(--text);
+}
+
+.dialog-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 0 18px;
+}
+
+.dialog-row .dialog-field {
+  padding: 14px 0 0;
+}
+
+.dialog-field-toggle .plan-toggle {
+  height: 35px;
+  padding: 0 10px 0 7px;
+  border-color: var(--border);
+  border-radius: 6px;
+  font-weight: 400;
 }
 
 .dialog-field .dialog-hint {
