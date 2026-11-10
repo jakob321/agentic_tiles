@@ -140,6 +140,8 @@ export interface UiSettings {
   defaultClaudeCwd: string;
   defaultCopilotCwd?: string;
   sidebarWidth: number;
+  /** The Chats view is hidden and only a narrow rail shows. */
+  sidebarCollapsed?: boolean;
   zoom: number;
   /** Model and reasoning last picked in the New Chat dialog, per CLI. */
   newChatDefaults?: Partial<Record<AgentProvider, { model: string; effort: string }>>;

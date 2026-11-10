@@ -18,13 +18,15 @@ import {
   refreshThreads,
 } from "./codex";
 import { NewChatDialog } from "./components/NewChatDialog";
-import { Sidebar } from "./components/Sidebar";
+import { Sidebar, SidebarRail } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
 import { isLayoutNode } from "./layout";
 import { persistedWorkspace, useAppStore } from "./store";
 import type { PersistedWorkspace } from "./types";
 import { nextZoom, zoomDirection } from "./zoom";
 import { prepareNotificationAudio } from "./notificationSounds";
+
+const SIDEBAR_COLLAPSE_WIDTH = 140;
 
 export default function App() {
   const settings = useAppStore((state) => state.settings);
@@ -182,7 +184,14 @@ export default function App() {
     const move = (pointer: PointerEvent) => {
       const origin = sidebarResizeRef.current;
       if (!origin) return;
-      setSettings({ sidebarWidth: Math.min(520, Math.max(220, origin.startWidth + pointer.clientX - origin.startX)) });
+      const width = origin.startWidth + pointer.clientX - origin.startX;
+      // Like VS Code, dragging well past the minimum width collapses the view.
+      if (width < SIDEBAR_COLLAPSE_WIDTH) {
+        setSettings({ sidebarCollapsed: true });
+        finish();
+        return;
+      }
+      setSettings({ sidebarWidth: Math.min(520, Math.max(220, width)) });
     };
     const finish = () => {
       sidebarResizeRef.current = null;
@@ -196,22 +205,30 @@ export default function App() {
   return (
     <div className="app-root">
       <div className="app-body">
-        <div className="sidebar-wrap" style={{ width: settings.sidebarWidth }}>
-          <Sidebar
-            codexVersion={codexVersion}
-            claudeVersion={claudeVersion}
-            showClaude={isVsCodeHost}
+        {settings.sidebarCollapsed ? (
+          <SidebarRail
+            onExpand={() => setSettings({ sidebarCollapsed: false })}
             onNewChat={() => setNewChatOpen(true)}
-            onReload={() => {
-              void refreshThreads();
-              void refreshCodexUsage();
-              void fetchProviderRateLimits("claude").then((rateLimits) =>
-                useAppStore.getState().setProviderRateLimits("claude", rateLimits),
-              );
-            }}
           />
-          <div className="sidebar-resizer" onPointerDown={beginSidebarResize} />
-        </div>
+        ) : (
+          <div className="sidebar-wrap" style={{ width: settings.sidebarWidth }}>
+            <Sidebar
+              codexVersion={codexVersion}
+              claudeVersion={claudeVersion}
+              showClaude={isVsCodeHost}
+              onNewChat={() => setNewChatOpen(true)}
+              onCollapse={() => setSettings({ sidebarCollapsed: true })}
+              onReload={() => {
+                void refreshThreads();
+                void refreshCodexUsage();
+                void fetchProviderRateLimits("claude").then((rateLimits) =>
+                  useAppStore.getState().setProviderRateLimits("claude", rateLimits),
+                );
+              }}
+            />
+            <div className="sidebar-resizer" onPointerDown={beginSidebarResize} />
+          </div>
+        )}
         <Workspace />
       </div>
       {startupError && (

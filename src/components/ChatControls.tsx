@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { setPlanMode } from "../codex";
+import { refreshProviderModels, setPlanMode } from "../codex";
 import { providerFromId, providerNames } from "../providers";
 import { defaultChatSettings, useAppStore } from "../store";
 import { notificationSounds, prepareNotificationAudio, previewNotificationSound } from "../notificationSounds";
@@ -28,6 +28,7 @@ export function ChatControls({ threadId }: { threadId: string }) {
   );
   const provider = thread?.provider ?? providerFromId(threadId);
   const providerModels = models.filter((model) => (model.provider ?? "codex") === provider);
+  const effortOptions = reasoningEfforts(providerModels, settings.model, provider);
   const [planBusy, setPlanBusy] = useState(false);
   const togglePlan = (enabled: boolean) => {
     setPlanBusy(true);
@@ -50,6 +51,10 @@ export function ChatControls({ threadId }: { threadId: string }) {
       <select
         aria-label="Model for this chat"
         title="Model for this chat"
+        onFocus={() => {
+          if (provider === "copilot") void refreshProviderModels(provider).catch((error) =>
+            useAppStore.getState().setChatError(threadId, error instanceof Error ? error.message : String(error)));
+        }}
         value={settings.model}
         onChange={(event) => {
           const model = providerModels.find((item) => item.id === event.target.value);
@@ -69,10 +74,12 @@ export function ChatControls({ threadId }: { threadId: string }) {
       <select
         aria-label="Reasoning effort for this chat"
         title="Reasoning effort for this chat"
-        value={settings.effort}
+        value={effortOptions.length ? settings.effort : ""}
+        disabled={effortOptions.length === 0}
         onChange={(event) => setThreadSettings(threadId, { effort: event.target.value })}
       >
-        {reasoningEfforts(providerModels, settings.model, provider).map((effort) => (
+        {effortOptions.length === 0 && <option value="">Managed by provider</option>}
+        {effortOptions.map((effort) => (
           <option key={effort} value={effort}>
             {effort}
           </option>
@@ -161,7 +168,7 @@ export function reasoningEfforts(
   modelId: string,
   provider: AgentProvider,
 ): string[] {
-  const model = models.find((item) => item.id === modelId);
+  const model = models.find((item) => item.id === modelId) ?? (provider === "copilot" ? models[0] : undefined);
   return (
     model?.supportedReasoningEfforts?.map((item) => item.reasoningEffort) ??
     (provider === "claude"

@@ -1,8 +1,8 @@
 {
   "name": "agentic-tiles",
   "displayName": "Agentic Tiles",
-  "description": "Run Codex, Claude, and GitHub Copilot CLI conversations in a persistent tiled VS Code workspace.",
-  "version": "0.3.3",
+  "description": "Run Codex, Claude, and VS Code Copilot conversations in a persistent tiled workspace.",
+  "version": "0.3.4",
   "publisher": "jakob321",
   "license": "MIT",
   "icon": "media/agentic-tiles.png",
@@ -73,6 +73,19 @@
           "type": "string",
           "default": "",
           "description": "Optional absolute path to the GitHub Copilot CLI executable. Leave empty to auto-detect it."
+        },
+        "agenticTiles.copilotBackend": {
+          "type": "string",
+          "enum": [
+            "vscode",
+            "cli"
+          ],
+          "enumDescriptions": [
+            "Use Copilot models and tools exposed by VS Code. No Copilot CLI is required.",
+            "Use an installed and authenticated GitHub Copilot CLI."
+          ],
+          "default": "vscode",
+          "description": "Copilot connection used by Agentic Tiles. Close and reopen Agentic Tiles after a change. Each connection has its own saved chats."
         }
       }
     }
@@ -85,7 +98,7 @@
     "build:webview": "esbuild ../src/main.tsx --bundle --minify --define:process.env.NODE_ENV='\"production\"' --platform=browser --format=iife --outfile=dist/webview.js",
     "build": "npm run clean && npm run typecheck && npm run build:host && npm run build:webview",
     "test": "vitest run",
-    "package": "vsce package --out dist/agentic-tiles-0.3.3.vsix"
+    "package": "vsce package --out dist/agentic-tiles-0.3.4.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
