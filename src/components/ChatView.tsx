@@ -19,6 +19,7 @@ import {
   steerQueuedMessage,
 } from "../codex";
 import { localFileTarget } from "../fileLinks";
+import { providerFromId, providerNames } from "../providers";
 import { useAppStore } from "../store";
 import type {
   ApprovalRequest,
@@ -51,8 +52,8 @@ export function ChatView({ threadId }: { threadId: string }) {
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialScrollThreadRef = useRef<string | null>(null);
-  const provider = chat?.thread?.provider ?? (threadId.startsWith("claude:") ? "claude" : "codex");
-  const agentName = provider === "claude" ? "Claude" : "Codex";
+  const provider = chat?.thread?.provider ?? providerFromId(threadId);
+  const agentName = providerNames[provider];
 
   useEffect(() => {
     void loadChat(threadId);
@@ -141,7 +142,7 @@ const ChatComposer = memo(function ChatComposer({ threadId }: { threadId: string
     (state) =>
       state.chats[threadId]?.thread?.provider ??
       state.threads.find((thread) => thread.id === threadId)?.provider ??
-      (threadId.startsWith("claude:") ? "claude" : "codex"),
+      providerFromId(threadId),
   );
   const queuedSubmissions = useAppStore(
     (state) => state.queues[threadId] ?? NO_QUEUED_SUBMISSIONS,
@@ -153,7 +154,7 @@ const ChatComposer = memo(function ChatComposer({ threadId }: { threadId: string
   const [sending, setSending] = useState(false);
   const [steeringId, setSteeringId] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const agentName = provider === "claude" ? "Claude" : "Codex";
+  const agentName = providerNames[provider];
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -358,35 +359,71 @@ function PlanDecisionCard({ threadId, agentName }: { threadId: string; agentName
 }
 
 function UserInputCard({ request }: { request: UserInputRequest }) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [other, setOther] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const complete = request.questions.every((question) => Boolean(answers[question.id]?.trim()));
-
+  const [error, setError] = useState("");
+  const complete =
+    request.questions.length > 0 &&
+    request.questions.every((question) =>
+      Boolean(answers[question.id]?.length || other[question.id]?.trim()),
+    );
   const submit = async () => {
     if (!complete || busy) return;
     setBusy(true);
+    setError("");
     try {
-      await answerUserInput(request.threadId, request, answers);
+      const result = Object.fromEntries(
+        request.questions.map((question) => {
+          const selected = answers[question.id] ?? [];
+          const freeform = other[question.id]?.trim();
+          return [question.id, [...selected, ...(freeform ? [freeform] : [])]];
+        }),
+      );
+      await answerUserInput(request.threadId, request, result);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="user-input-card">
-      <span className="item-label">Codex needs your input</span>
+    <form
+      className="user-input-card"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+    >
+      <span className="item-label">Your answer is required</span>
       {request.questions.map((question) => (
-        <fieldset key={question.id}>
+        <fieldset key={question.id} disabled={busy}>
           <legend>{question.header}</legend>
           <p>{question.question}</p>
+          {question.multiSelect && <small>Select one or more options.</small>}
           {question.options?.map((option) => (
             <label className="user-input-option" key={option.label}>
               <input
-                type="radio"
-                name={`${String(request.requestId)}-${question.id}`}
+                type={question.multiSelect ? "checkbox" : "radio"}
+                name={`${request.threadId}-${String(request.requestId)}-${question.id}`}
                 value={option.label}
-                checked={answers[question.id] === option.label}
-                onChange={() => setAnswers((current) => ({ ...current, [question.id]: option.label }))}
+                checked={answers[question.id]?.includes(option.label) ?? false}
+                onChange={() => {
+                  setAnswers((current) => {
+                    const selected = current[question.id] ?? [];
+                    return {
+                      ...current,
+                      [question.id]: question.multiSelect
+                        ? selected.includes(option.label)
+                          ? selected.filter((value) => value !== option.label)
+                          : [...selected, option.label]
+                        : [option.label],
+                    };
+                  });
+                  if (!question.multiSelect)
+                    setOther((current) => ({ ...current, [question.id]: "" }));
+                }}
               />
               <span>
                 <strong>{option.label}</strong>
@@ -396,20 +433,24 @@ function UserInputCard({ request }: { request: UserInputRequest }) {
           ))}
           {(question.isOther || !question.options?.length) && (
             <input
+              aria-label={`${question.header || question.question}: ${question.isOther ? "Other answer" : "Your answer"}`}
               type={question.isSecret ? "password" : "text"}
-              value={question.options?.some((option) => option.label === answers[question.id]) ? "" : answers[question.id] ?? ""}
-              onChange={(event) =>
-                setAnswers((current) => ({ ...current, [question.id]: event.target.value }))
-              }
+              value={other[question.id] ?? ""}
+              onChange={(event) => {
+                setOther((current) => ({ ...current, [question.id]: event.target.value }));
+                if (!question.multiSelect)
+                  setAnswers((current) => ({ ...current, [question.id]: [] }));
+              }}
               placeholder={question.isOther ? "Other answer" : "Your answer"}
             />
           )}
         </fieldset>
       ))}
-      <button className="primary-button" onClick={() => void submit()} disabled={!complete || busy}>
+      {error && <div role="alert">{error}</div>}
+      <button type="submit" className="primary-button" disabled={!complete || busy}>
         {busy ? "Sending…" : "Send answer"}
       </button>
-    </div>
+    </form>
   );
 }
 

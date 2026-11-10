@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --exclude 'vscode-extension/**'",
+    "test:watch": "vitest --exclude 'vscode-extension/**'",
     "tauri": "tauri",
     "deb": "tauri build --bundles deb"
   },

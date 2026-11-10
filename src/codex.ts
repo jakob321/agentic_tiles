@@ -1,4 +1,5 @@
-import { agentRequest, codexRequest, codexRespond } from "./api";
+import { agentRequest, agentRespond, codexRequest, codexRespond } from "./api";
+import { agentProviders, providerFromId, providerNames } from "./providers";
 import { defaultChatSettings, useAppStore } from "./store";
 import { playNotificationSound } from "./notificationSounds";
 import type {
@@ -31,10 +32,9 @@ const visibleSources = [
 ];
 
 export async function fetchThreads(archived = false): Promise<ThreadSummary[]> {
-  const results = await Promise.all([
-    fetchProviderThreads("codex", archived),
-    fetchProviderThreads("claude", archived).catch(() => []),
-  ]);
+  const results = await Promise.all(
+    agentProviders.map((provider) => fetchProviderThreads(provider, archived).catch(() => [])),
+  );
   return results.flat().sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
@@ -71,12 +71,13 @@ export async function refreshThreads(): Promise<void> {
 }
 
 export async function fetchModels(): Promise<ModelOption[]> {
-  const responses = await Promise.all([
-    providerRequest<{ data: ModelOption[] }>("codex", "model/list", {}),
-    agentRequest<{ data: ModelOption[] }>("claude", "model/list", {}).catch(() => ({ data: [] })),
-  ]);
+  const responses = await Promise.all(
+    agentProviders.map((provider) =>
+      providerRequest<{ data: ModelOption[] }>(provider, "model/list", {}).catch(() => ({ data: [] })),
+    ),
+  );
   return responses.flatMap((response, index) =>
-    response.data.map((model) => ({ ...model, provider: index === 0 ? "codex" : "claude" })),
+    response.data.map((model) => ({ ...model, provider: agentProviders[index] })),
   );
 }
 
@@ -356,6 +357,10 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
       await startTurn(threadId, input.trim());
       return;
     }
+    if (provider === "copilot") {
+      addResult("GitHub Copilot usage is available in your GitHub account settings.");
+      return;
+    }
     const mode = (args[0] ?? "overview").toLocaleLowerCase();
     if (!["overview", "daily", "weekly", "cumulative"].includes(mode)) {
       addResult("Usage: /usage [daily|weekly|cumulative]", "error");
@@ -374,7 +379,7 @@ export async function runSlashCommand(threadId: string, input: string): Promise<
     const settings = chatSettings(threadId);
     addResult([
       `Chat: ${threadId}`,
-      `Provider: ${provider === "claude" ? "Claude" : "Codex"}`,
+      `Provider: ${providerNames[provider]}`,
       `Directory: ${thread?.cwd ?? "Unknown"}`,
       `Model: ${settings.model || thread?.model || "Default"}`,
       `Reasoning: ${settings.effort}`,
@@ -610,20 +615,23 @@ export async function answerApproval(
         scope: decision === "acceptForSession" ? "session" : "turn",
       }
     : { decision };
-  await codexRespond(approval.requestId, result as Record<string, unknown>);
+  if (providerForThread(threadId) === "codex") await codexRespond(approval.requestId, result as Record<string, unknown>);
+  else await agentRespond(providerForThread(threadId), approval.requestId, result as Record<string, unknown>);
   useAppStore.getState().removeApproval(threadId, approval.requestId);
 }
 
 export async function answerUserInput(
   threadId: string,
   request: UserInputRequest,
-  answers: Record<string, string>,
+  answers: Record<string, string | string[]>,
 ): Promise<void> {
-  await codexRespond(request.requestId, {
+  const result = {
     answers: Object.fromEntries(
-      Object.entries(answers).map(([questionId, answer]) => [questionId, { answers: [answer] }]),
+      Object.entries(answers).map(([questionId, answer]) => [questionId, { answers: Array.isArray(answer) ? answer : [answer] }]),
     ),
-  });
+  };
+  if (providerForThread(threadId) === "codex") await codexRespond(request.requestId, result);
+  else await agentRespond(providerForThread(threadId), request.requestId, result);
   useAppStore.getState().removeUserInputRequest(threadId, request.requestId);
 }
 
@@ -700,6 +708,8 @@ export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope
   }
 
   if (method === "turn/completed") {
+    for (const request of store.userInputRequests[threadId] ?? []) store.removeUserInputRequest(threadId, request.requestId);
+    for (const request of store.approvals[threadId] ?? []) store.removeApproval(threadId, request.requestId);
     const turn = params.turn as { id?: string; status?: string; error?: unknown } | undefined;
     if (turn?.id && turn.status === "completed" && !turn.error) {
       const key = JSON.stringify([provider, threadId, turn.id]);
@@ -730,7 +740,7 @@ export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope
     const error = params.error as { message?: string } | undefined;
     store.setChatError(
       threadId,
-      error?.message ?? `${provider === "claude" ? "Claude" : "Codex"} reported an error`,
+      error?.message ?? `${providerNames[provider]} reported an error`,
     );
     return;
   }
@@ -759,7 +769,7 @@ export function handleAgentEvent(provider: AgentProvider, message: CodexEnvelope
 export function providerForThread(threadId: string): AgentProvider {
   const state = useAppStore.getState();
   const thread = state.chats[threadId]?.thread ?? state.threads.find((item) => item.id === threadId);
-  return thread?.provider ?? (threadId.startsWith("claude:") ? "claude" : "codex");
+  return thread?.provider ?? providerFromId(threadId);
 }
 
 function requestForThread<T = unknown>(

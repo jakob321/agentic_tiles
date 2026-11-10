@@ -1,4 +1,5 @@
 import { memo, useMemo } from "react";
+import { providerNames } from "../providers";
 import { findTile } from "../layout";
 import { useAppStore } from "../store";
 import type { RateLimitData, ThreadSummary } from "../types";
@@ -20,6 +21,7 @@ export function Sidebar({ codexVersion, claudeVersion, showClaude, onNewChat, on
   const setSearch = useAppStore((state) => state.setSearch);
   const setShowArchived = useAppStore((state) => state.setShowArchived);
   const approvals = useAppStore((state) => state.approvals);
+  const userInputRequests = useAppStore((state) => state.userInputRequests);
   const connected = useAppStore((state) => state.connected);
   const usage = useAppStore((state) => state.usage);
   const rateLimits = useAppStore((state) => state.rateLimits);
@@ -105,7 +107,7 @@ export function Sidebar({ codexVersion, claudeVersion, showClaude, onNewChat, on
           <ChatRow
             key={thread.id}
             thread={thread}
-            approvalCount={approvals[thread.id]?.length ?? 0}
+            approvalCount={(approvals[thread.id]?.length ?? 0) + (userInputRequests[thread.id]?.length ?? 0)}
             selected={focusedThreadId === thread.id}
             tileId={focusedTileId}
             onOpen={openInTile}
@@ -151,7 +153,7 @@ const ChatRow = memo(function ChatRow({
         <span className="chat-row-title">{title}</span>
         <span className="chat-row-meta">
           <span className={`chat-provider provider-${thread.provider ?? "codex"}`}>
-            {thread.provider === "claude" ? "Claude" : "Codex"}
+            {providerNames[thread.provider ?? "codex"]}
           </span>
           {project} · {relativeTime(thread.updatedAt)}
         </span>

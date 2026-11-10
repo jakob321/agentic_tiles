@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+- Add GitHub Copilot CLI chats, model choices, saved transcripts, queues, and selectable questions.
+- Show Claude questions as selectable options and return the selected answers to the CLI.
+- Add multiple selections, send errors, and retry support to question controls.
+- Require VS Code 1.101 or newer for the Copilot SDK runtime.
+
 ## 0.3.2
 
 - Replaced the plan-mode badge with a switch in each chat's control bar.

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { setPlanMode } from "../codex";
+import { providerFromId, providerNames } from "../providers";
 import { defaultChatSettings, useAppStore } from "../store";
 import { notificationSounds, prepareNotificationAudio, previewNotificationSound } from "../notificationSounds";
 import type { AgentProvider, ModelOption, NotificationSound } from "../types";
@@ -25,7 +26,7 @@ export function ChatControls({ threadId }: { threadId: string }) {
       }),
     [override, thread?.model, thread?.reasoningEffort],
   );
-  const provider = thread?.provider ?? (threadId.startsWith("claude:") ? "claude" : "codex");
+  const provider = thread?.provider ?? providerFromId(threadId);
   const providerModels = models.filter((model) => (model.provider ?? "codex") === provider);
   const [planBusy, setPlanBusy] = useState(false);
   const togglePlan = (enabled: boolean) => {
@@ -38,7 +39,7 @@ export function ChatControls({ threadId }: { threadId: string }) {
   return (
     <div className="chat-controls">
       <span className={`provider-pill provider-${provider}`}>
-        {provider === "claude" ? "Claude" : "Codex"}
+        {providerNames[provider]}
       </span>
       <PlanToggle
         compact

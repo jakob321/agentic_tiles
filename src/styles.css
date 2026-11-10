@@ -1995,3 +1995,14 @@ select:focus {
     max-width: 110px;
   }
 }
+
+.chat-provider.provider-copilot,
+.provider-pill.provider-copilot {
+  color: #9cb8ff;
+}
+
+.user-input-option:has(input:checked) {
+  background: var(--accent-soft);
+  outline: 1px solid var(--accent);
+  border-radius: 6px;
+}

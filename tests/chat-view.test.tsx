@@ -41,6 +41,7 @@ afterEach(() => {
     act(() => root.unmount());
   }
   vi.clearAllMocks();
+  document.body.replaceChildren();
 });
 
 describe("chat view", () => {
@@ -364,5 +365,63 @@ describe("chat view", () => {
     expect(card.textContent).toContain("Implement this plan?");
     await act(async () => card.querySelector<HTMLButtonElement>(".primary-button")!.click());
     expect(codex.approvePlan).toHaveBeenCalledWith(threadId);
+  });
+});
+
+describe("question controls", () => {
+  function renderQuestion(multiSelect = false) {
+    const threadId = "copilot:questions";
+    useAppStore.setState({ threads: [], chats: {}, approvals: {}, commandMessages: {}, queues: {}, threadSettings: {},
+      userInputRequests: { [threadId]: [{ requestId: "request-1", threadId, questions: [{ id: "q", header: "Storage", question: "Which storage?", isOther: true, isSecret: false, multiSelect,
+        options: [{ label: "SQLite", description: "Local database" }, { label: "Postgres", description: "Server database" }] }] }] },
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container); roots.push(root);
+    act(() => root.render(<ChatView threadId={threadId} />));
+    return container;
+  }
+  function enter(input: HTMLInputElement, text: string) {
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  it("requires a selection and sends it after the user submits the form", async () => {
+    const container = renderQuestion();
+    const form = container.querySelector(".user-input-card")!;
+    const button = form.querySelector<HTMLButtonElement>("button")!;
+    expect(button.disabled).toBe(true);
+    act(() => form.querySelector<HTMLInputElement>('input[value="SQLite"]')!.click());
+    expect(button.disabled).toBe(false);
+    expect(codex.answerUserInput).not.toHaveBeenCalled();
+    await act(async () => button.click());
+    expect(codex.answerUserInput).toHaveBeenCalledWith("copilot:questions", expect.objectContaining({ requestId: "request-1" }), { q: ["SQLite"] });
+  });
+  it("supports multiple selections", async () => {
+    const form = renderQuestion(true).querySelector(".user-input-card")!;
+    act(() => {
+      form.querySelector<HTMLInputElement>('input[value="SQLite"]')!.click();
+      form.querySelector<HTMLInputElement>('input[value="Postgres"]')!.click();
+    });
+    await act(async () => form.querySelector<HTMLButtonElement>("button")!.click());
+    expect(codex.answerUserInput).toHaveBeenCalledWith("copilot:questions", expect.anything(), { q: ["SQLite", "Postgres"] });
+  });
+  it("clears a single selection when the user types another answer", async () => {
+    const form = renderQuestion().querySelector(".user-input-card")!;
+    act(() => form.querySelector<HTMLInputElement>('input[value="SQLite"]')!.click());
+    enter(form.querySelector<HTMLInputElement>('input[type="text"]')!, "Files");
+    expect(form.querySelector<HTMLInputElement>('input[value="SQLite"]')!.checked).toBe(false);
+    await act(async () => form.querySelector<HTMLButtonElement>("button")!.click());
+    expect(codex.answerUserInput).toHaveBeenCalledWith("copilot:questions", expect.anything(), { q: ["Files"] });
+  });
+  it("shows a send error and keeps the answer for a retry", async () => {
+    codex.answerUserInput.mockRejectedValueOnce(new Error("Connection lost"));
+    const form = renderQuestion().querySelector(".user-input-card")!;
+    act(() => form.querySelector<HTMLInputElement>('input[value="Postgres"]')!.click());
+    await act(async () => form.querySelector<HTMLButtonElement>("button")!.click());
+    expect(form.querySelector('[role="alert"]')?.textContent).toBe("Connection lost");
+    expect(form.querySelector<HTMLInputElement>('input[value="Postgres"]')!.checked).toBe(true);
+    expect(form.querySelector<HTMLButtonElement>("button")!.disabled).toBe(false);
   });
 });

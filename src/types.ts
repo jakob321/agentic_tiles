@@ -1,6 +1,6 @@
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
-export type AgentProvider = "codex" | "claude";
+export type AgentProvider = "codex" | "claude" | "copilot";
 
 export interface ThreadStatus {
   type: "notLoaded" | "idle" | "systemError" | "active" | string;
@@ -73,6 +73,7 @@ export interface UserInputQuestion {
   header: string;
   question: string;
   isOther: boolean;
+  multiSelect?: boolean;
   isSecret: boolean;
   options: UserInputOption[] | null;
 }
@@ -137,6 +138,7 @@ export interface UiSettings {
   networkAccess: boolean;
   defaultCwd: string;
   defaultClaudeCwd: string;
+  defaultCopilotCwd?: string;
   sidebarWidth: number;
   zoom: number;
   /** Model and reasoning last picked in the New Chat dialog, per CLI. */

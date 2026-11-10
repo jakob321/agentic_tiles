@@ -1,3 +1,4 @@
+import { providerNames } from "../providers";
 import { useEffect, useRef, useState } from "react";
 import { isVsCodeHost, pickDirectory } from "../api";
 import { createThread } from "../codex";
@@ -57,7 +58,7 @@ export function NewChatDialog({ open: visible, onClose }: { open: boolean; onClo
   const chooseProvider = (next: AgentProvider) => {
     setProvider(next);
     applyModelDefaults(next);
-    setCwd(next === "claude" ? defaultClaudeCwd : defaultCwd);
+    setCwd(next === "claude" ? defaultClaudeCwd : next === "copilot" ? useAppStore.getState().settings.defaultCopilotCwd ?? defaultCwd : defaultCwd);
     setError("");
   };
 
@@ -73,7 +74,7 @@ export function NewChatDialog({ open: visible, onClose }: { open: boolean; onClo
     try {
       const threadId = await createThread(cwd.trim(), prompt, provider, { model, effort, planMode });
       setSettings({
-        ...(provider === "claude" ? { defaultClaudeCwd: cwd.trim() } : { defaultCwd: cwd.trim() }),
+        ...(provider === "claude" ? { defaultClaudeCwd: cwd.trim() } : provider === "copilot" ? { defaultCopilotCwd: cwd.trim() } : { defaultCwd: cwd.trim() }),
         newChatDefaults: { ...newChatDefaults, [provider]: { model, effort } },
       });
       openInTile(focusedTileId, threadId);
@@ -113,6 +114,7 @@ export function NewChatDialog({ open: visible, onClose }: { open: boolean; onClo
         >
           <option value="codex">Codex</option>
           {isVsCodeHost && <option value="claude">Claude</option>}
+          {isVsCodeHost && <option value="copilot">GitHub Copilot</option>}
         </select>
       </label>
       <label className="dialog-field">
@@ -160,7 +162,7 @@ export function NewChatDialog({ open: visible, onClose }: { open: boolean; onClo
         <textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
-          placeholder={`What should ${provider === "claude" ? "Claude" : "Codex"} ${planMode ? "plan" : "work on"}?`}
+          placeholder={`What should ${providerNames[provider]} ${planMode ? "plan" : "work on"}?`}
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
               event.preventDefault();

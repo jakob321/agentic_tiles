@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { isAbsolute, resolve } from "node:path";
 import { CodexClient, type JsonValue } from "./codexClient";
+import { CopilotClient } from "./copilotClient";
 import { ClaudeClient } from "./claudeClient";
 
 interface WebviewRequest {
@@ -16,6 +17,7 @@ const claudeStateKey = "agenticTiles.claudeChats";
 let currentPanel: vscode.WebviewPanel | undefined;
 let currentClient: CodexClient | undefined;
 let currentClaudeClient: ClaudeClient | undefined;
+let currentCopilotClient: CopilotClient | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel("Agentic Tiles", { log: true });
@@ -79,10 +81,19 @@ function configurePanel(
     },
     (line) => output.info(line),
   );
+  const copilotClient = new CopilotClient(
+    vscode.workspace.getConfiguration("agenticTiles").get<string>("copilotPath", ""),
+    context.globalState.get("agenticTiles.copilotChats"),
+    async (state) => { await context.globalState.update("agenticTiles.copilotChats", state); },
+    (message) => { void panel.webview.postMessage({ type: "event", event: "agent", payload: { provider: "copilot", message } }); },
+    (line) => output.info(line),
+  );
   currentClient?.dispose();
   currentClaudeClient?.dispose();
+  currentCopilotClient?.dispose();
   currentClient = client;
   currentClaudeClient = claudeClient;
+  currentCopilotClient = copilotClient;
 
   const stopEvents = client.onEvent((payload) => {
     void panel.webview.postMessage({
@@ -98,7 +109,7 @@ function configurePanel(
   const messageSubscription = panel.webview.onDidReceiveMessage(async (message: WebviewRequest) => {
     if (message?.type !== "request" || typeof message.id !== "number") return;
     try {
-      const result = await handleRequest(message, client, claudeClient, context);
+      const result = await handleRequest(message, client, claudeClient, copilotClient, context);
       await panel.webview.postMessage({ type: "response", id: message.id, result });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -113,6 +124,8 @@ function configurePanel(
     messageSubscription.dispose();
     client.dispose();
     claudeClient.dispose();
+    copilotClient.dispose();
+    if (currentCopilotClient === copilotClient) currentCopilotClient = undefined;
     if (currentPanel === panel) currentPanel = undefined;
     if (currentClient === client) currentClient = undefined;
     if (currentClaudeClient === claudeClient) currentClaudeClient = undefined;
@@ -123,9 +136,13 @@ async function handleRequest(
   request: WebviewRequest,
   client: CodexClient,
   claudeClient: ClaudeClient,
+  copilotClient: CopilotClient,
   context: vscode.ExtensionContext,
 ): Promise<unknown> {
   const params = request.params ?? {};
+  const agent = params.provider === "claude" ? claudeClient
+    : params.provider === "copilot" ? copilotClient : params.provider === "codex" ? client : undefined;
+  if (request.method.startsWith("agent.") && !agent) throw new Error(`Unknown agent provider: ${String(params.provider)}`);
   switch (request.method) {
     case "codex.request":
       return client.request(String(params.method), asRecord(params.params));
@@ -134,11 +151,11 @@ async function handleRequest(
     case "codex.info":
       return client.info();
     case "agent.request":
-      return params.provider === "claude"
-        ? claudeClient.request(String(params.method), asRecord(params.params))
-        : client.request(String(params.method), asRecord(params.params));
+      return agent!.request(String(params.method), asRecord(params.params));
+    case "agent.respond":
+      return agent!.respond(params.id as JsonValue, asRecord(params.result));
     case "agent.info":
-      return params.provider === "claude" ? claudeClient.info() : client.info();
+      return agent!.info();
     case "workspace.load":
       return context.globalState.get(stateKey, null);
     case "workspace.save":
@@ -220,6 +237,7 @@ function randomNonce(): string {
 }
 
 export function deactivate(): void {
+  currentCopilotClient?.dispose();
   currentClient?.dispose();
   currentClaudeClient?.dispose();
 }
