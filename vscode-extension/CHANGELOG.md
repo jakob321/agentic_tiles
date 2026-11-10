@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4
+
+- Use Copilot in VS Code by default. The Copilot CLI is optional.
+- Add model selection, streamed answers, file tools, VS Code tool calls, questions, and chat recovery through the public Language Model API.
+- Ask for model access only after a user action. Keep VS Code tool confirmations.
+- Store chats separately for the VS Code and CLI backends.
+
 ## 0.3.3
 
 - Add GitHub Copilot CLI chats, model choices, saved transcripts, queues, and selectable questions.

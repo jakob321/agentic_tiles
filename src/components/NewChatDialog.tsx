@@ -1,7 +1,7 @@
 import { providerNames } from "../providers";
 import { useEffect, useRef, useState } from "react";
 import { isVsCodeHost, pickDirectory } from "../api";
-import { createThread } from "../codex";
+import { createThread, refreshProviderModels } from "../codex";
 import { defaultChatSettings, useAppStore } from "../store";
 import type { AgentProvider } from "../types";
 import { reasoningEfforts } from "./ChatControls";
@@ -60,6 +60,9 @@ export function NewChatDialog({ open: visible, onClose }: { open: boolean; onClo
     applyModelDefaults(next);
     setCwd(next === "claude" ? defaultClaudeCwd : next === "copilot" ? useAppStore.getState().settings.defaultCopilotCwd ?? defaultCwd : defaultCwd);
     setError("");
+    if (next === "copilot") {
+      void refreshProviderModels(next).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
+    }
   };
 
   const browse = async () => {
@@ -107,7 +110,7 @@ export function NewChatDialog({ open: visible, onClose }: { open: boolean; onClo
         </button>
       </div>
       <label className="dialog-field">
-        <span>CLI</span>
+        <span>Agent</span>
         <select
           value={provider}
           onChange={(event) => chooseProvider(event.target.value as AgentProvider)}
@@ -143,8 +146,9 @@ export function NewChatDialog({ open: visible, onClose }: { open: boolean; onClo
         </label>
         <label className="dialog-field">
           <span>Reasoning</span>
-          <select value={effort} onChange={(event) => setEffort(event.target.value)}>
-            {!effortOptions.includes(effort) && <option value={effort}>{effort}</option>}
+          <select value={effortOptions.length ? effort : ""} disabled={effortOptions.length === 0} onChange={(event) => setEffort(event.target.value)}>
+            {effortOptions.length === 0 && <option value="">Managed by provider</option>}
+            {effortOptions.length > 0 && !effortOptions.includes(effort) && <option value={effort}>{effort}</option>}
             {effortOptions.map((item) => (
               <option key={item} value={item}>
                 {item}

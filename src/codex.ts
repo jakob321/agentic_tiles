@@ -81,6 +81,16 @@ export async function fetchModels(): Promise<ModelOption[]> {
   );
 }
 
+/** Called from a user action because VS Code may ask for Copilot model access. */
+export async function refreshProviderModels(provider: AgentProvider): Promise<void> {
+  const response = await providerRequest<{ data: ModelOption[] }>(provider, "model/list", { interactive: true });
+  const store = useAppStore.getState();
+  store.setModels([
+    ...store.models.filter((model) => (model.provider ?? "codex") !== provider),
+    ...response.data.map((model) => ({ ...model, provider })),
+  ]);
+}
+
 export async function fetchUsage(): Promise<{
   usage: UsageData | null;
   rateLimits: RateLimitData | null;

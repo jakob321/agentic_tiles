@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { isAbsolute, resolve } from "node:path";
 import { CodexClient, type JsonValue } from "./codexClient";
+import { VsCodeCopilotRuntime } from "./vscodeCopilotRuntime";
 import { CopilotClient } from "./copilotClient";
 import { ClaudeClient } from "./claudeClient";
 
@@ -81,12 +82,15 @@ function configurePanel(
     },
     (line) => output.info(line),
   );
+  const copilotBackend = vscode.workspace.getConfiguration("agenticTiles").get<string>("copilotBackend", "vscode");
+  const copilotStateKey = copilotBackend === "cli" ? "agenticTiles.copilotChats" : "agenticTiles.copilotVsCodeChats";
   const copilotClient = new CopilotClient(
     vscode.workspace.getConfiguration("agenticTiles").get<string>("copilotPath", ""),
-    context.globalState.get("agenticTiles.copilotChats"),
-    async (state) => { await context.globalState.update("agenticTiles.copilotChats", state); },
+    context.globalState.get(copilotStateKey),
+    async (state) => { await context.globalState.update(copilotStateKey, state); },
     (message) => { void panel.webview.postMessage({ type: "event", event: "agent", payload: { provider: "copilot", message } }); },
     (line) => output.info(line),
+    copilotBackend === "cli" ? undefined : { path: "vscode.lm", create: () => new VsCodeCopilotRuntime() },
   );
   currentClient?.dispose();
   currentClaudeClient?.dispose();

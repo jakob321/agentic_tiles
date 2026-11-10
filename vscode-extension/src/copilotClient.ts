@@ -1,11 +1,14 @@
 import type {
-  CopilotClient as SdkClient,
-  CopilotSession,
   PermissionRequest,
   PermissionRequestResult,
   SessionConfig,
-  SessionEvent,
 } from "@github/copilot-sdk" with { "resolution-mode": "import" };
+import type {
+  CopilotConversation,
+  CopilotEvent,
+  CopilotRuntime,
+  CopilotRuntimeFactory,
+} from "./copilotRuntime";
 import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -31,19 +34,19 @@ interface PendingInput {
 }
 interface ActiveTurn {
   turn: Turn;
-  session: CopilotSession;
+  session: CopilotConversation;
   options: Record<string, unknown>;
   interrupted?: boolean;
 }
 
-/** Uses the installed Copilot CLI over stdio. It shares the CLI's existing login. */
+/** Shared chat, queue, and request handling for the VS Code and CLI Copilot backends. */
 export class CopilotClient {
   private readonly threads = new Map<string, CopilotThread>();
   private readonly queues = new Map<string, QueuedSubmission[]>();
   private readonly active = new Map<string, ActiveTurn>();
   private readonly pending = new Map<string, PendingInput>();
-  private sdk?: SdkClient;
-  private starting?: Promise<SdkClient>;
+  private sdk?: CopilotRuntime;
+  private starting?: Promise<CopilotRuntime>;
   private saveChain = Promise.resolve();
   private disposed = false;
 
@@ -53,6 +56,7 @@ export class CopilotClient {
     private readonly save: (state: SavedState) => Promise<void>,
     private readonly emit: (message: CodexMessage) => void,
     private readonly log: (line: string) => void,
+    private readonly runtimeFactory?: CopilotRuntimeFactory,
   ) {
     const saved = record(state);
     for (const thread of (Array.isArray(saved.threads) ? saved.threads : []) as CopilotThread[]) {
@@ -71,7 +75,7 @@ export class CopilotClient {
     const sdk = await this.client();
     const status = await sdk.getStatus();
     return {
-      path: findCopilot(this.configuredPath)!,
+      path: this.runtimeFactory?.path ?? findCopilot(this.configuredPath)!,
       version: status.version,
       running: this.active.size > 0,
     };
@@ -100,10 +104,20 @@ export class CopilotClient {
     void this.sdk?.stop().catch((error) => this.log(`Unable to stop Copilot: ${String(error)}`));
   }
 
-  private async client(): Promise<SdkClient> {
+  private async client(): Promise<CopilotRuntime> {
     if (this.disposed) throw new Error("Copilot client is closed.");
     if (!this.starting) {
       this.starting = (async () => {
+        if (this.runtimeFactory) {
+          const runtime = this.runtimeFactory.create();
+          this.sdk = runtime;
+          await runtime.start();
+          if (this.disposed) {
+            await runtime.stop();
+            throw new Error("Copilot client is closed.");
+          }
+          return runtime;
+        }
         const executable = findCopilot(this.configuredPath);
         if (!executable)
           throw new Error(
@@ -141,7 +155,7 @@ export class CopilotClient {
     const id = String(params.threadId ?? "");
     switch (method) {
       case "model/list": {
-        const models = await (await this.client()).listModels();
+        const models = await (await this.client()).listModels(params.interactive === true);
         return {
           data: models
             .filter((model) => model.policy?.state !== "disabled")
@@ -307,9 +321,10 @@ export class CopilotClient {
         return { answer: value, wasFreeform: !request.choices?.includes(value) };
       },
     };
-    let session: CopilotSession | undefined;
+    let session: CopilotConversation | undefined;
     try {
       const sdk = await this.client();
+      sdk.restoreTranscript?.(thread);
       if (thread.model && typeof params.effort === "string") {
         const model = (await sdk.listModels()).find((model) => model.id === thread.model);
         if (model?.supportedReasoningEfforts?.includes(params.effort))
@@ -343,10 +358,10 @@ export class CopilotClient {
     }
   }
 
-  private event(id: string, event: SessionEvent): void {
+  private event(id: string, event: CopilotEvent): void {
     const active = this.active.get(id);
     if (!active) return;
-    const data = event.data as Record<string, unknown>;
+    const data = record(event.data);
     if (event.type === "session.idle") {
       this.finish(id, active.interrupted ? "interrupted" : "completed");
       return;
@@ -368,6 +383,7 @@ export class CopilotClient {
             : String(data.content ?? ""),
       };
     }
+    if (event.type === "plan.proposed") item = { id: event.id, type: "plan", text: data.content };
     if (event.type === "tool.execution_start")
       item = {
         id: String(data.toolCallId),

@@ -6,15 +6,15 @@
 
 **Run several coding-agent conversations at once without losing the thread.**
 
-Agentic Tiles is a free and open-source tiled workspace for coding-agent CLIs. The VS Code
+Agentic Tiles is a free and open-source tiled workspace for coding agents. The VS Code
 extension supports Codex, Claude, and GitHub Copilot, while the desktop package currently supports Codex.
 Keep four tasks visible, split the screen when another job appears, drag chats between panes, and
 return later to the same layout.
 
 It is available as a full-editor VS Code extension and as a native Ubuntu desktop app. It uses the
-CLIs already installed on your machine, including their login, configuration, permissions, and
-working directories. Agentic Tiles has no account, hosted backend, paid licence, or subscription
-of its own.
+CLIs installed on your machine and the Copilot models exposed by VS Code. CLI chats use the
+installed CLI login, configuration, permissions, and working directories. Agentic Tiles has no
+account, hosted backend, paid licence, or subscription of its own.
 
 > Agentic Tiles is an independent project. It is not affiliated with or endorsed by OpenAI or
 > Anthropic or GitHub. Provider services remain subject to their own terms and plan limits.
@@ -63,11 +63,12 @@ every pane.
 
 - Ubuntu or another compatible Linux environment.
 - VS Code 1.101 or newer for the extension.
-- An installed and authenticated CLI for each provider you use. The desktop app requires `codex`.
+- For Codex and Claude, install and sign in to the corresponding CLI. The desktop app requires `codex`.
 - `codex` available on `PATH`, in a common NVM/npm location, or configured explicitly.
 - For Claude chats in VS Code, an authenticated `claude` CLI or compatible remote launcher.
-- For GitHub Copilot chats in VS Code, an authenticated `copilot` CLI. Use version 1.0.108 or newer with the bundled SDK.
-- Set `agenticTiles.copilotPath` if Copilot is not on `PATH` or in a common npm/NVM location.
+- For GitHub Copilot chats, enable and sign in to Copilot in VS Code. No Copilot CLI is required.
+- Grant Agentic Tiles model access when VS Code asks. Model access is subject to your Copilot plan and organization policy.
+- Set `agenticTiles.copilotBackend` to `cli` to use an optional Copilot CLI instead. That mode requires CLI version 1.0.108 or newer. Set `agenticTiles.copilotPath` if automatic detection fails.
 
 Agentic Tiles launches the installed CLIs and does not bundle or replace them.
 
@@ -77,7 +78,7 @@ Agentic Tiles launches the installed CLIs and does not bundle or replace them.
 cd vscode-extension
 npm ci
 npm run package
-code --install-extension dist/agentic-tiles-0.3.3.vsix
+code --install-extension dist/agentic-tiles-0.3.4.vsix
 ```
 
 Then click the **Agentic Tiles** layout icon in the editor title bar, or run
@@ -126,9 +127,13 @@ npm run tauri dev
 The React interface in `src/` is shared by the Tauri desktop host and the VS Code webview. Each
 host provides a small bridge for agent requests, persistence, and native UI operations. Claude
 and GitHub Copilot support live in the VS Code host; the Tauri desktop host uses Codex only.
-Copilot uses the official [GitHub Copilot SDK](https://github.com/github/copilot-sdk) over stdio.
-Copilot chats created in Agentic Tiles can be resumed after a restart. Existing Copilot CLI chats
-are not imported. Copilot usage counters are not shown; `/usage` points to GitHub account settings.
+Copilot uses the public [VS Code Language Model API](https://code.visualstudio.com/api/extension-guides/ai/language-model) by default.
+Agentic Tiles manages its own conversations and tool loop. It does not import existing Copilot Chat
+sessions or embed the built-in Copilot agent. Models and registered tools are limited to those VS Code
+makes available to extensions. Copilot chats created in Agentic Tiles can be resumed after a restart.
+The optional CLI backend uses the official [GitHub Copilot SDK](https://github.com/github/copilot-sdk)
+over stdio. Each backend keeps a separate chat index. Close and reopen Agentic Tiles after changing
+`agenticTiles.copilotBackend`. Copilot usage counters are not shown; `/usage` points to GitHub account settings.
 
 ## Contributing
 

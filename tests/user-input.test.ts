@@ -13,6 +13,7 @@ import {
   fetchThreads,
   handleAgentEvent,
   providerForThread,
+  refreshProviderModels,
 } from "../src/codex";
 import { useAppStore } from "../src/store";
 
@@ -74,6 +75,20 @@ describe("provider routing", () => {
     };
     await answerApproval("copilot:a", approval, "decline");
     expect(api.agentRespond).toHaveBeenCalledWith("copilot", "r", { decision: "decline" });
+  });
+  it("loads Copilot models from a user action and keeps the other providers", async () => {
+    useAppStore.setState({
+      models: [{ id: "codex-model", displayName: "Codex", provider: "codex" }],
+    });
+    api.agentRequest.mockResolvedValueOnce({
+      data: [{ id: "native-model", displayName: "Copilot" }],
+    });
+    await refreshProviderModels("copilot");
+    expect(api.agentRequest).toHaveBeenCalledWith("copilot", "model/list", { interactive: true });
+    expect(useAppStore.getState().models).toMatchObject([
+      { provider: "codex" },
+      { id: "native-model", provider: "copilot" },
+    ]);
   });
   it("loads other providers when Codex is not installed", async () => {
     api.codexRequest.mockRejectedValue(new Error("Codex was not found"));
