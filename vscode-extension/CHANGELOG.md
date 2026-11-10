@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.3
 
 - Add GitHub Copilot CLI chats, model choices, saved transcripts, queues, and selectable questions.
 - Show Claude questions as selectable options and return the selected answers to the CLI.

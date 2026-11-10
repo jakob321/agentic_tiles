@@ -91,5 +91,5 @@ npm run package
 Install the generated package with **Extensions: Install from VSIX...** or:
 
 ```bash
-code --install-extension dist/agentic-tiles-0.3.1.vsix
+code --install-extension dist/agentic-tiles-0.3.3.vsix
 ```

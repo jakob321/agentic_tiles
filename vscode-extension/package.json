@@ -2,7 +2,7 @@
   "name": "agentic-tiles",
   "displayName": "Agentic Tiles",
   "description": "Run Codex, Claude, and GitHub Copilot CLI conversations in a persistent tiled VS Code workspace.",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "publisher": "jakob321",
   "license": "MIT",
   "icon": "media/agentic-tiles.png",
@@ -85,7 +85,7 @@
     "build:webview": "esbuild ../src/main.tsx --bundle --minify --define:process.env.NODE_ENV='\"production\"' --platform=browser --format=iife --outfile=dist/webview.js",
     "build": "npm run clean && npm run typecheck && npm run build:host && npm run build:webview",
     "test": "vitest run",
-    "package": "vsce package --out dist/agentic-tiles-0.3.2.vsix"
+    "package": "vsce package --out dist/agentic-tiles-0.3.3.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -77,7 +77,7 @@ Agentic Tiles launches the installed CLIs and does not bundle or replace them.
 cd vscode-extension
 npm ci
 npm run package
-code --install-extension dist/agentic-tiles-0.3.1.vsix
+code --install-extension dist/agentic-tiles-0.3.3.vsix
 ```
 
 Then click the **Agentic Tiles** layout icon in the editor title bar, or run
