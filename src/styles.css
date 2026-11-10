@@ -31,48 +31,6 @@
   --radius: 8px;
 }
 
-body.vscode-light,
-body.vscode-dark,
-body.vscode-high-contrast,
-body.vscode-high-contrast-light {
-  --bg: var(--vscode-editor-background);
-  --bg-raised: var(--vscode-sideBar-background, var(--vscode-editor-background));
-  --panel: var(--vscode-editorWidget-background, var(--vscode-editor-background));
-  --panel-hover: var(--vscode-list-hoverBackground, var(--vscode-toolbar-hoverBackground, var(--vscode-editorWidget-background)));
-  --panel-active: var(--vscode-list-inactiveSelectionBackground, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
-  --border: var(--vscode-panel-border, var(--vscode-widget-border, var(--vscode-input-border)));
-  --border-strong: var(--vscode-focusBorder, var(--vscode-contrastBorder, var(--vscode-textLink-foreground)));
-  --text: var(--vscode-editor-foreground);
-  --text-muted: var(--vscode-descriptionForeground);
-  --text-faint: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
-  --accent: var(--vscode-textLink-foreground);
-  --accent-strong: var(--vscode-focusBorder, var(--vscode-textLink-foreground));
-  --accent-soft: var(--vscode-list-inactiveSelectionBackground, var(--vscode-editor-selectionBackground));
-  --warning: var(--vscode-editorWarning-foreground);
-  --danger: var(--vscode-errorForeground);
-  --chrome: var(--vscode-tab-activeBackground, var(--vscode-editor-background));
-  --workspace-bg: var(--vscode-editorGroup-emptyBackground, var(--vscode-editor-background));
-  --code-bg: var(--vscode-textCodeBlock-background, var(--vscode-input-background));
-  --code-text: var(--vscode-textPreformat-foreground, var(--vscode-editor-foreground));
-  --message-text: var(--vscode-editor-foreground);
-  --primary-bg: var(--vscode-button-background);
-  --primary-fg: var(--vscode-button-foreground);
-  --shadow-color: var(--vscode-widget-shadow, rgba(0, 0, 0, 0.35));
-  --card-bg: var(--vscode-editorWidget-background, var(--vscode-editor-background));
-  color-scheme: light dark;
-  font-family: var(--vscode-font-family, inherit);
-}
-
-body.vscode-light,
-body.vscode-high-contrast-light {
-  color-scheme: light;
-}
-
-body.vscode-dark,
-body.vscode-high-contrast {
-  color-scheme: dark;
-}
-
 * {
   box-sizing: border-box;
 }

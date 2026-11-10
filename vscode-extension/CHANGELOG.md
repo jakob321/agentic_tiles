@@ -6,6 +6,7 @@
 - Add model selection, streamed answers, file tools, VS Code tool calls, questions, and chat recovery through the public Language Model API.
 - Ask for model access only after a user action. Keep VS Code tool confirmations.
 - Store chats separately for the VS Code and CLI backends.
+- Redesign the extension interface to match VS Code. All colors come from the active theme, so light and high-contrast themes are readable. The desktop app does not change.
 
 ## 0.3.3
 
