@@ -10,9 +10,17 @@ interface SidebarProps {
   showClaude: boolean;
   onNewChat: () => void;
   onReload: () => void;
+  onCollapse: () => void;
 }
 
-export function Sidebar({ codexVersion, claudeVersion, showClaude, onNewChat, onReload }: SidebarProps) {
+export function Sidebar({
+  codexVersion,
+  claudeVersion,
+  showClaude,
+  onNewChat,
+  onReload,
+  onCollapse,
+}: SidebarProps) {
   const threads = useAppStore((state) => state.threads);
   const search = useAppStore((state) => state.search);
   const showArchived = useAppStore((state) => state.showArchived);
@@ -76,6 +84,15 @@ export function Sidebar({ codexVersion, claudeVersion, showClaude, onNewChat, on
           <button className="icon-button" onClick={onNewChat} title="New chat" aria-label="New chat">
             +
           </button>
+          <button
+            className="icon-button sidebar-toggle"
+            onClick={onCollapse}
+            title="Hide chats"
+            aria-label="Hide chats"
+            aria-expanded
+          >
+            ‹
+          </button>
         </div>
       </div>
 
@@ -119,6 +136,34 @@ export function Sidebar({ codexVersion, claudeVersion, showClaude, onNewChat, on
       </div>
     </aside>
   );
+}
+
+/** Shown instead of the sidebar while the Chats view is collapsed. */
+export function SidebarRail({ onExpand, onNewChat }: { onExpand: () => void; onNewChat: () => void }) {
+  const waiting = useAppStore(
+    (state) => countRequests(state.approvals) + countRequests(state.userInputRequests),
+  );
+  return (
+    <nav className="sidebar-rail" aria-label="Chats">
+      <button
+        className="icon-button sidebar-toggle"
+        onClick={onExpand}
+        title={waiting > 0 ? `Show chats (${waiting} waiting for you)` : "Show chats"}
+        aria-label="Show chats"
+        aria-expanded={false}
+      >
+        ›
+        {waiting > 0 && <span className="approval-count rail-badge">{waiting}</span>}
+      </button>
+      <button className="icon-button rail-new-chat" onClick={onNewChat} title="New chat" aria-label="New chat">
+        +
+      </button>
+    </nav>
+  );
+}
+
+function countRequests(requests: Record<string, unknown[]>): number {
+  return Object.values(requests).reduce((total, list) => total + list.length, 0);
 }
 
 const ChatRow = memo(function ChatRow({

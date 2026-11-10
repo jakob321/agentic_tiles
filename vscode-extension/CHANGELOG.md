@@ -7,6 +7,8 @@
 - Ask for model access only after a user action. Keep VS Code tool confirmations.
 - Store chats separately for the VS Code and CLI backends.
 - Redesign the extension interface to match VS Code. All colors come from the active theme, so light and high-contrast themes are readable. The desktop app does not change.
+- Make command lines in chats smaller and closer together.
+- Collapse the Chats view to a narrow rail with the button in its heading, or drag its edge to the left. The rail shows how many requests wait for you.
 
 ## 0.3.3
 

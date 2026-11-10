@@ -47,8 +47,10 @@ every pane.
   Rising when an agent finishes a response. Chats start muted; sound choices and mute settings
   survive restarts. Use **Sound off / Sound on** and **Preview** in the chat controls. After
   reopening the app, click or press a key to enable audio for previously unmuted chats.
-- **Persistent setup** — tile splits, sizes, tabs, active chats, sidebar width, and settings survive
-  restarts.
+- **Collapsible Chats view** — hide the chat list to give the tiles more space. A narrow rail shows
+  how many requests wait for you.
+- **Persistent setup** — tile splits, sizes, tabs, active chats, sidebar width and collapse state, and
+  settings survive restarts.
 - **Native VS Code theming** — the extension follows the active editor color theme.
 - **Chat slash commands** — use `/plan`, `/usage`, `/status`, `/model`, `/reasoning`, and `/help`.
 
