@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
-import type { CodexMessage } from "./codexClient";
+import type { CodexMessage, JsonValue } from "./codexClient";
 
 interface ClaudeItem {
   id: string;
@@ -75,6 +75,7 @@ export class ClaudeClient {
   private readonly active = new Map<string, ActiveTurn>();
   private readonly lastTurnOptions = new Map<string, Record<string, unknown>>();
   private readonly steered = new Map<string, string>();
+  private readonly pendingInput = new Map<string, { threadId: string; input: Record<string, unknown>; questionIds?: string[] }>();
   private saveChain = Promise.resolve();
   private usage: ClaudeRateLimitData | null;
   private usageUpdatedAt: number;
@@ -157,10 +158,47 @@ export class ClaudeClient {
     }
   }
 
+  async respond(id: JsonValue, result: Record<string, unknown>): Promise<void> {
+    const key = String(id);
+    const pending = this.pendingInput.get(key);
+    const active = pending && this.active.get(pending.threadId);
+    if (!pending || !active?.child.stdin.writable) throw new Error("This Claude request is no longer active.");
+    let response: Record<string, unknown>;
+    if (pending.questionIds) {
+      const answers = record(result.answers);
+      const questions = pending.input.questions as Array<Record<string, unknown>>;
+      const mapped = Object.fromEntries(pending.questionIds.map((questionId, index) => {
+        const values = record(answers[questionId]).answers;
+        if (!Array.isArray(values) || !values.length) throw new Error("Answer each Claude question.");
+        return [String(questions[index].question), values.map(String).join(", ")];
+      }));
+      response = { behavior: "allow", updatedInput: { ...pending.input, answers: mapped } };
+    } else {
+      response = result.decision === "accept" || result.decision === "acceptForSession"
+        ? { behavior: "allow", updatedInput: pending.input }
+        : { behavior: "deny", message: "The user declined this request." };
+    }
+    this.writeControl(active, key, response);
+    this.pendingInput.delete(key);
+    this.emit({ method: "serverRequest/resolved", params: { threadId: pending.threadId, requestId: id } });
+  }
+
+  private writeControl(active: ActiveTurn, requestId: string, response: Record<string, unknown>): void {
+    active.child.stdin.write(`${JSON.stringify({ type: "control_response", response: { subtype: "success", request_id: requestId, response } })}\n`);
+  }
+
+  private clearInput(threadId: string): void {
+    for (const [id, pending] of this.pendingInput) if (pending.threadId === threadId) {
+      this.pendingInput.delete(id);
+      this.emit({ method: "serverRequest/resolved", params: { threadId, requestId: id } });
+    }
+  }
+
   dispose(): void {
     this.disposed = true;
     for (const active of this.active.values()) active.child.kill("SIGTERM");
     this.active.clear();
+    this.pendingInput.clear();
   }
 
   private listThreads(params: Record<string, unknown>): { data: ClaudeThread[]; nextCursor: null } {
@@ -230,7 +268,7 @@ export class ClaudeClient {
     this.persist();
     this.emit({ method: "turn/started", params: { threadId, turn, thread } });
 
-    const args = claudeArgs(thread, params, text, firstTurn);
+    const args = claudeArgs(thread, params, firstTurn);
     const child = spawn(executable, args, {
       env: {
         ...environmentFor(executable),
@@ -241,6 +279,11 @@ export class ClaudeClient {
     });
     const active: ActiveTurn = { child, turnId: turn.id, interrupted: false };
     this.active.set(threadId, active);
+    child.stdin.on("error", (error) => {
+      if (this.active.get(threadId) !== active) return;
+      active.error = `Unable to send input to Claude: ${error.message}`;
+      child.kill("SIGTERM");
+    });
 
     const lines = createInterface({ input: child.stdout });
     lines.on("line", (line) => this.handleLine(threadId, line));
@@ -261,6 +304,7 @@ export class ClaudeClient {
       thread.status = { type: "systemError" };
       throw error;
     });
+    child.stdin.write(`${JSON.stringify({ type: "user", session_id: thread.sessionId, message: { role: "user", content: text }, parent_tool_use_id: null })}\n`);
     return { turn };
   }
 
@@ -276,6 +320,44 @@ export class ClaudeClient {
     const active = this.active.get(threadId);
     const turn = thread?.turns.find((item) => item.id === active?.turnId);
     if (!thread || !active || !turn) return;
+
+    if (event.type === "control_request" && typeof event.request_id === "string") {
+      const request = record(event.request);
+      if (request.subtype !== "can_use_tool") {
+        active.child.stdin.write(`${JSON.stringify({ type: "control_response", response: { subtype: "error", request_id: event.request_id, error: "Unsupported control request" } })}\n`);
+        return;
+      }
+      const input = record(request.input);
+      const id = event.request_id;
+      if (request.tool_name === "AskUserQuestion" && Array.isArray(input.questions) && input.questions.length) {
+        const questions = input.questions.map((raw, index) => {
+          const question = record(raw);
+          return {
+            id: `question-${index}`, header: String(question.header ?? "Question"), question: String(question.question ?? ""),
+            isOther: true, isSecret: false, multiSelect: question.multiSelect === true,
+            options: Array.isArray(question.options) ? question.options.map((rawOption) => {
+              const option = record(rawOption);
+              return { label: String(option.label ?? ""), description: String(option.description ?? "") };
+            }) : null,
+          };
+        });
+        this.pendingInput.set(id, { threadId, input, questionIds: questions.map((question) => question.id) });
+        this.emit({ id, method: "item/tool/requestUserInput", params: { threadId, questions } });
+      } else if (request.tool_name === "ExitPlanMode") {
+        this.writeControl(active, id, { behavior: "deny", message: "The user must approve the plan in Agentic Tiles." });
+      } else if (this.lastTurnOptions.get(threadId)?.approvalPolicy === "never") {
+        this.writeControl(active, id, { behavior: "deny", message: "This operation requires approval, but approval prompts are disabled." });
+      } else {
+        this.pendingInput.set(id, { threadId, input });
+        this.emit({ id, method: "item/commandExecution/requestApproval", params: { threadId, command: input.command ?? request.tool_name, reason: JSON.stringify(input, null, 2) } });
+      }
+      return;
+    }
+    if (event.type === "control_cancel_request" && typeof event.request_id === "string") {
+      this.pendingInput.delete(event.request_id);
+      this.emit({ method: "serverRequest/resolved", params: { threadId, requestId: event.request_id } });
+      return;
+    }
 
     if (event.type === "rate_limit_event") {
       const usage = usageFromRateLimitEvent(event);
@@ -321,8 +403,9 @@ export class ClaudeClient {
       }
     }
 
-    if (event.type === "result" && event.is_error === true) {
-      active.error = String(event.result || event.subtype || "Claude reported an error");
+    if (event.type === "result") {
+      if (event.is_error === true) active.error = String(event.result || event.subtype || "Claude reported an error");
+      active.child.stdin.end();
     }
     thread.updatedAt = unixTime();
   }
@@ -332,6 +415,7 @@ export class ClaudeClient {
     const thread = this.threads.get(threadId);
     if (!active || !thread) return;
     this.active.delete(threadId);
+    this.clearInput(threadId);
     const turn = thread.turns.find((item) => item.id === active.turnId);
     if (!turn) return;
 
@@ -366,6 +450,7 @@ export class ClaudeClient {
     const active = this.active.get(threadId);
     if (!active) throw new Error("Claude is not currently working on this chat");
     active.interrupted = true;
+    this.clearInput(threadId);
     active.child.kill("SIGINT");
     setTimeout(() => {
       if (this.active.get(threadId) === active) active.child.kill("SIGKILL");
@@ -518,31 +603,29 @@ export function permissionArgs(params: Record<string, unknown>): string[] {
   const collaboration = record(params.collaborationMode);
   const sandbox = record(params.sandboxPolicy);
   if (collaboration.mode === "plan" || sandbox.type === "readOnly") {
-    return ["--permission-mode", "plan", "--permission-prompts", "none"];
+    return ["--permission-mode", "plan"];
   }
   if (sandbox.type === "dangerFullAccess" && params.approvalPolicy === "never") {
     return ["--permission-mode", "bypassPermissions", "--dangerously-skip-permissions"];
   }
   if (params.approvalPolicy === "never") {
-    return ["--permission-mode", "dontAsk", "--permission-prompts", "none"];
+    return ["--permission-mode", "dontAsk"];
   }
-  return ["--permission-mode", "acceptEdits", "--permission-prompts", "none"];
+  return ["--permission-mode", "acceptEdits"];
 }
 
 function claudeArgs(
   thread: ClaudeThread,
   params: Record<string, unknown>,
-  text: string,
   firstTurn: boolean,
 ): string[] {
-  const args = ["-p", "--output-format", "stream-json", "--verbose"];
+  const args = ["-p", "--output-format", "stream-json", "--input-format", "stream-json", "--permission-prompt-tool", "stdio", "--verbose"];
   args.push(firstTurn ? "--session-id" : "--resume", thread.sessionId);
   if (typeof params.model === "string" && params.model) args.push("--model", params.model);
   if (typeof params.effort === "string" && params.effort) args.push("--effort", params.effort);
   args.push(...permissionArgs(params));
   const sandbox = record(params.sandboxPolicy);
   if (sandbox.networkAccess === false) args.push("--disallowed-tools", "WebFetch,WebSearch");
-  args.push(text);
   return args;
 }
 

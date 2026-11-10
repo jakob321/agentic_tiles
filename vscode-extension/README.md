@@ -2,14 +2,14 @@
 
 **Run multiple coding-agent conversations side by side in one persistent VS Code workspace.**
 
-Agentic Tiles turns the Codex and Claude CLIs into a full editor-area workspace with resizable
+Agentic Tiles turns the Codex, Claude, and GitHub Copilot CLIs into a full editor-area workspace with resizable
 tiles and browser-style tabs inside every tile. Choose the CLI for each new conversation, keep
 several tasks visible, and return to the same layout after restarting VS Code.
 
 Agentic Tiles is free and open source. It has no separate account, hosted backend, paid licence,
 or subscription.
 
-> This is an independent project and is not affiliated with or endorsed by OpenAI or Anthropic.
+> This is an independent project and is not affiliated with or endorsed by OpenAI, Anthropic, or GitHub.
 > The CLIs must be installed separately, and their service usage remains subject to the user's
 > respective provider plan.
 
@@ -18,9 +18,10 @@ or subscription.
 - Split any tile horizontally or vertically and resize the result.
 - Keep independent browser-style tabs in every tile.
 - Drag chats from the searchable sidebar into any tile.
-- Choose Codex or Claude when creating each conversation.
-- See live percentage-remaining usage counters for both providers.
+- Choose Codex, Claude, or GitHub Copilot when creating each conversation.
+- See live percentage-remaining usage counters for Codex and Claude.
 - Follow live messages, reasoning, commands, tools, approvals, and agent questions.
+- Answer structured questions with radio buttons, checkboxes, or typed text. Failed sends keep the answer for a retry.
 - Queue multiple follow-up messages while an agent is working, then steer any one into the active turn.
 - Review changed files and unified diffs directly in the conversation.
 - Open, reveal, or copy local file links from responses.
@@ -33,17 +34,28 @@ or subscription.
 
 ## Requirements
 
-- Ubuntu/Linux and VS Code 1.90 or newer.
-- The `codex` CLI installed and authenticated.
+- Ubuntu/Linux and VS Code 1.101 or newer.
+- The `codex` CLI installed and authenticated to create Codex chats.
 - The `claude` CLI installed and authenticated to create Claude chats.
+- The `copilot` CLI installed and authenticated to create GitHub Copilot chats. Use CLI version 1.0.108 or newer.
 
-The extension starts the installed CLIs; it does not bundle either provider. If automatic
-discovery fails, set `agenticTiles.codexPath` or `agenticTiles.claudePath` to the corresponding
+Install and log in to the CLIs for the providers you use. You can use Copilot without Codex.
+
+The extension starts the installed CLIs; it does not bundle the CLIs. If automatic
+discovery fails, set `agenticTiles.codexPath`, `agenticTiles.claudePath`, or `agenticTiles.copilotPath` to the corresponding
 executable. `claudePath` may also point to an SSH launcher, though remote Claude sessions operate
 on the remote machine's filesystem.
 
 Claude conversations created by Agentic Tiles are persisted and listed by the extension. Importing
 pre-existing Claude CLI conversations is not supported yet.
+
+Copilot uses the official [GitHub Copilot SDK](https://github.com/github/copilot-sdk) over stdio.
+Copilot chats created in Agentic Tiles can be resumed after a restart. Existing Copilot CLI chats
+are not imported. Model choices come from the installed CLI. Copilot usage counters are not shown;
+`/usage` points to GitHub account settings.
+
+The host build excludes `koffi`, which the SDK uses only for its optional native transport. Agentic
+Tiles uses stdio. The bundle test runs the SDK from a folder without `node_modules` to check this path.
 
 ## Open Agentic Tiles
 
@@ -59,7 +71,7 @@ prompt.
 ## Privacy
 
 Agentic Tiles adds no telemetry and sends no conversation data to an Agentic Tiles service.
-Workspace layout and Agentic Tiles' Claude transcript index are kept in VS Code's local extension
+Workspace layout and Agentic Tiles' Claude and Copilot transcript indexes are kept in VS Code's local extension
 storage. Each CLI communicates according to the user's existing provider configuration.
 
 ## Source, issues, and licence

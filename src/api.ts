@@ -95,13 +95,19 @@ export async function agentRequest<T = unknown>(
   params: Record<string, unknown> = {},
 ): Promise<T> {
   if (vscode) return hostRequest<T>("agent.request", { provider, method, params });
-  if (provider !== "codex") throw new Error("Claude chats are currently available in the VS Code extension only.");
+  if (provider !== "codex") throw new Error("Claude and GitHub Copilot chats are currently available in the VS Code extension only.");
   return invoke<T>("codex_request", { method, params });
 }
 
 export async function codexRespond(id: JsonValue, result: Record<string, unknown>): Promise<void> {
   if (vscode) return hostRequest<void>("codex.respond", { id, result });
   await invoke("codex_respond", { id, result });
+}
+
+export async function agentRespond(provider: AgentProvider, id: JsonValue, result: Record<string, unknown>): Promise<void> {
+  if (provider === "codex") return codexRespond(id, result);
+  if (vscode) return hostRequest<void>("agent.respond", { provider, id, result });
+  throw new Error("This agent is available in the VS Code extension only.");
 }
 
 export async function getCodexInfo(): Promise<{
@@ -119,7 +125,7 @@ export async function getAgentInfo(provider: AgentProvider): Promise<{
   running: boolean;
 }> {
   if (vscode) return hostRequest("agent.info", { provider });
-  if (provider !== "codex") throw new Error("Claude chats are currently available in the VS Code extension only.");
+  if (provider !== "codex") throw new Error("Claude and GitHub Copilot chats are currently available in the VS Code extension only.");
   return invoke("codex_info");
 }
 

@@ -84,8 +84,8 @@ export default function App() {
         if (saved && validWorkspace(saved)) useAppStore.getState().hydrate(saved);
         useAppStore.getState().setHydrated(true);
 
-        const info = await getCodexInfo();
-        setCodexVersion(info.version);
+        const info = await (isVsCodeHost ? getCodexInfo().catch(() => null) : getCodexInfo());
+        setCodexVersion(info?.version ?? "");
         const [models, account, claudeRateLimits, claudeInfo] = await Promise.all([
           fetchModels(),
           fetchUsage(),

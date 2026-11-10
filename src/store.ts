@@ -128,7 +128,7 @@ export const useAppStore = create<AppState>((set) => ({
   models: [],
   usage: null,
   rateLimits: null,
-  providerRateLimits: { codex: null, claude: null },
+  providerRateLimits: { codex: null, claude: null, copilot: null },
   connected: false,
   startupError: null,
   hydrated: false,

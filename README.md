@@ -7,7 +7,7 @@
 **Run several coding-agent conversations at once without losing the thread.**
 
 Agentic Tiles is a free and open-source tiled workspace for coding-agent CLIs. The VS Code
-extension supports both Codex and Claude, while the desktop package currently supports Codex.
+extension supports Codex, Claude, and GitHub Copilot, while the desktop package currently supports Codex.
 Keep four tasks visible, split the screen when another job appears, drag chats between panes, and
 return later to the same layout.
 
@@ -17,7 +17,7 @@ working directories. Agentic Tiles has no account, hosted backend, paid licence,
 of its own.
 
 > Agentic Tiles is an independent project. It is not affiliated with or endorsed by OpenAI or
-> Anthropic. Provider services remain subject to their own terms and plan limits.
+> Anthropic or GitHub. Provider services remain subject to their own terms and plan limits.
 
 ## Why Agentic Tiles?
 
@@ -34,6 +34,8 @@ every pane.
 - **Drag-and-drop layout** — drag a chat from the sidebar into an empty or occupied tile.
 - **Live agent activity** — follow messages, reasoning summaries, commands, tools, approvals, and
   clarification requests as they happen.
+- **Selectable answers** — answer structured agent questions with radio buttons, checkboxes, or
+  typed text. Send the answer when it is complete. Failed sends keep your answer for a retry.
 - **Live provider usage** — see the remaining Codex and Claude allowance without reloading VS Code.
 - **Queue and steer follow-ups** — line up multiple prompts while an agent works, or send any
   queued message into the active turn immediately.
@@ -54,16 +56,18 @@ every pane.
 
 | Edition | Best for | Status |
 | --- | --- | --- |
-| VS Code extension | Codex and Claude beside your code | Ubuntu/Linux supported |
+| VS Code extension | Codex, Claude, and GitHub Copilot beside your code | Ubuntu/Linux supported |
 | Desktop app | A dedicated Codex workspace | Ubuntu `.deb` package |
 
 ## Requirements
 
 - Ubuntu or another compatible Linux environment.
-- VS Code 1.90 or newer for the extension.
-- The `codex` CLI installed and authenticated.
+- VS Code 1.101 or newer for the extension.
+- An installed and authenticated CLI for each provider you use. The desktop app requires `codex`.
 - `codex` available on `PATH`, in a common NVM/npm location, or configured explicitly.
 - For Claude chats in VS Code, an authenticated `claude` CLI or compatible remote launcher.
+- For GitHub Copilot chats in VS Code, an authenticated `copilot` CLI. Use version 1.0.108 or newer with the bundled SDK.
+- Set `agenticTiles.copilotPath` if Copilot is not on `PATH` or in a common npm/NVM location.
 
 Agentic Tiles launches the installed CLIs and does not bundle or replace them.
 
@@ -121,7 +125,10 @@ npm run tauri dev
 
 The React interface in `src/` is shared by the Tauri desktop host and the VS Code webview. Each
 host provides a small bridge for agent requests, persistence, and native UI operations. Claude
-support currently lives in the VS Code host; the Tauri desktop host continues to use Codex only.
+and GitHub Copilot support live in the VS Code host; the Tauri desktop host uses Codex only.
+Copilot uses the official [GitHub Copilot SDK](https://github.com/github/copilot-sdk) over stdio.
+Copilot chats created in Agentic Tiles can be resumed after a restart. Existing Copilot CLI chats
+are not imported. Copilot usage counters are not shown; `/usage` points to GitHub account settings.
 
 ## Contributing
 
